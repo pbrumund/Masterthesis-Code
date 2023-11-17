@@ -5,6 +5,8 @@ import csv
 import scipy as scp
 import typing
 from mpl_toolkits.mplot3d import Axes3D
+import utils as ut
+import fileloading as fi
 
 def load_prediction(start_time, end_time):
     filename = start_time.strftime("%Y%m%d") + "-" + end_time.strftime("%Y%m%d") + ".csv"
@@ -443,7 +445,7 @@ if __name__ == "__main__":
     plt.show() """
 
     #Plot prediction error for current wind speed and predicted wind speed in certain range
-    n = 6
+    """ n = 6
     wind_measured_range = [5,8]
     wind_predicted_range = [8,12]
     wind_predicted_range_now = [5,8]
@@ -473,9 +475,191 @@ if __name__ == "__main__":
     plt.figure()
     plt.hist(errors_select, bins=50, range=[-10,5])
     plt.xlabel(f'prediction error for {n} steps with predictions in range {wind_predicted_range[0]}<x<{wind_predicted_range[1]} and current wind speed in range{wind_measured_range[0]}<x<{wind_measured_range[1]}')
+    plt.show() """
+
+    #Plot error variance over CAPE or other variable
+    """ start_time = datetime.datetime(2020,1,1)
+    end_time = datetime.datetime(2020,1,31)
+    weather_data = fi.load_weather_data(start_time, end_time)
+
+    n_points = len(weather_data['times_meas'])
+
+    measurements = np.zeros(n_points)
+    predictions = np.zeros(n_points)
+    errors = np.zeros(n_points)
+    cape_pred = np.zeros(n_points)
+
+    for i in range(n_points):
+        t = weather_data['times_meas'][i]
+        measurements[i] = ut.get_wind_value(weather_data, t, 0)
+        predictions[i] = ut.get_NWP(weather_data, t, 0, 'wind_speed_10m')
+        errors[i] = measurements[i] - predictions[i]
+        cape_pred[i] = ut.get_NWP(weather_data, t, 0, 'specific_convective_available_potential_energy')
+    
+    cape_sorted = np.sort(cape_pred)
+    errors_sorted = errors[np.argsort(cape_pred)]
+
+    bins = 20
+    var_errors_in_range = np.zeros(bins)
+    mean_errors_in_range = np.zeros(bins)
+    cape_range_mean = np.zeros(bins)
+    for i in range(bins):
+        index_1 = int(n_points*i/bins)
+        index_2 = int(n_points*(i+1)/bins)
+        cape_range_mean[i] = np.mean(cape_sorted[index_1:index_2])
+        var_errors_in_range[i] = np.var(errors_sorted[index_1:index_2])
+        mean_errors_in_range[i] = np.mean(errors_sorted[index_1:index_2])
+
+
+    plt.figure()
+    plt.scatter(np.sqrt(cape_pred), errors)
+    plt.xlabel('sqrt(CAPE)')
+    plt.ylabel('prediction error')
+    plt.figure()
+    plt.plot(np.sqrt(cape_range_mean), mean_errors_in_range)
+    plt.plot(np.sqrt(cape_range_mean), np.sqrt(var_errors_in_range))
+    plt.legend(['mean error', 'standard deviation'])
+    plt.xlabel('sqrt(CAPE)')
+    plt.ylabel('Error Variance')
+    plt.show() """
+
+    #Plot error variance over CIN
+    """ start_time = datetime.datetime(2020,1,1)
+    end_time = datetime.datetime(2020,1,31)
+    weather_data = fi.load_weather_data(start_time, end_time)
+
+    n_points = len(weather_data['times_meas'])
+
+    measurements = np.zeros(n_points)
+    predictions = np.zeros(n_points)
+    errors = np.zeros(n_points)
+    cin_pred = np.zeros(n_points)
+
+    for i in range(n_points):
+        t = weather_data['times_meas'][i]
+        measurements[i] = ut.get_wind_value(weather_data, t, 0)
+        predictions[i] = ut.get_NWP(weather_data, t, 0, 'wind_speed_10m')
+        errors[i] = measurements[i] - predictions[i]
+        cin_pred[i] = ut.get_NWP(weather_data, t, 0, "atmosphere_convective_inhibition")
+    
+    cin_sorted = np.sort(cin_pred)
+    errors_sorted = errors[np.argsort(cin_pred)]
+
+    bins = 20
+    var_errors_in_range = np.zeros(bins)
+    mean_errors_in_range = np.zeros(bins)
+    cin_range_mean = np.zeros(bins)
+    for i in range(bins):
+        index_1 = int(n_points*i/bins)
+        index_2 = int(n_points*(i+1)/bins)
+        cin_range_mean[i] = np.mean(cin_sorted[index_1:index_2])
+        var_errors_in_range[i] = np.var(errors_sorted[index_1:index_2])
+        mean_errors_in_range[i] = np.mean(errors_sorted[index_1:index_2]) 
+
+
+    plt.figure()
+    plt.scatter(cin_pred, errors)
+    plt.xlabel('CIN')
+    plt.ylabel('prediction error')
+    plt.figure()
+    plt.plot(cin_range_mean, var_errors_in_range)
+    plt.plot(cin_range_mean, mean_errors_in_range)
+    plt.xlabel('CIN')
+    plt.ylabel('Error Variance')
+    plt.show()"""
+
+    # plot error over air pressure
+
+    """ start_time = datetime.datetime(2020,1,1)
+    end_time = datetime.datetime(2020,1,31)
+    weather_data = fi.load_weather_data(start_time, end_time)
+
+    n_points = len(weather_data['times_meas'])
+
+    measurements = np.zeros(n_points)
+    predictions = np.zeros(n_points)
+    errors = np.zeros(n_points)
+    p_pred = np.zeros(n_points)
+
+    for i in range(n_points):
+        t = weather_data['times_meas'][i]
+        measurements[i] = ut.get_wind_value(weather_data, t, 0)
+        predictions[i] = ut.get_NWP(weather_data, t, 0, 'wind_speed_10m')
+        errors[i] = measurements[i] - predictions[i]
+        p_pred[i] = ut.get_NWP(weather_data, t, 0, "air_pressure_at_sea_level")
+    
+    p_sorted = np.sort(p_pred)
+    errors_sorted = errors[np.argsort(p_pred)]
+
+    bins = 10
+    var_errors_in_range = np.zeros(bins)
+    mean_errors_in_range = np.zeros(bins)
+    p_range_mean = np.zeros(bins)
+    for i in range(bins):
+        index_1 = int(n_points*i/bins)
+        index_2 = int(n_points*(i+1)/bins)
+        p_range_mean[i] = np.mean(p_sorted[index_1:index_2])
+        var_errors_in_range[i] = np.var(errors_sorted[index_1:index_2])
+        mean_errors_in_range[i] = np.mean(errors_sorted[index_1:index_2])
+
+
+    plt.figure()
+    plt.scatter(p_pred, errors)
+    plt.xlabel('air pressure')
+    plt.ylabel('prediction error')
+    plt.figure()
+    plt.plot(p_range_mean, mean_errors_in_range)
+    plt.plot(p_range_mean, np.sqrt(var_errors_in_range))
+    plt.legend(['mean error', 'standard deviation'])
+    plt.xlabel('air pressure')
+    plt.ylabel('prediction error')
+    plt.show() """
+
+    # plot error over temperature
+    start_time = datetime.datetime(2020,1,1)
+    end_time = datetime.datetime(2020,1,31)
+    weather_data = fi.load_weather_data(start_time, end_time)
+
+    n_points = len(weather_data['times_meas'])-60
+
+    measurements = np.zeros(n_points)
+    predictions = np.zeros(n_points)
+    errors = np.zeros(n_points)
+    temp_pred = np.zeros(n_points)
+
+    for i in range(n_points):
+        t = weather_data['times_meas'][i]
+        measurements[i] = ut.get_wind_value(weather_data, t, 60)
+        predictions[i] = ut.get_NWP(weather_data, t, 60, 'wind_speed_10m')
+        errors[i] = measurements[i] - predictions[i]
+        temp_pred[i] = ut.get_NWP(weather_data, t, 60, "air_temperature_2m")
+    
+    temp_sorted = np.sort(temp_pred)
+    errors_sorted = errors[np.argsort(temp_pred)]
+
+    bins = 10
+    var_errors_in_range = np.zeros(bins)
+    mean_errors_in_range = np.zeros(bins)
+    temp_range_mean = np.zeros(bins)
+    for i in range(bins):
+        index_1 = int(n_points*i/bins)
+        index_2 = int(n_points*(i+1)/bins)
+        temp_range_mean[i] = np.mean(temp_sorted[index_1:index_2])
+        var_errors_in_range[i] = np.var(errors_sorted[index_1:index_2])
+        mean_errors_in_range[i] = np.mean(errors_sorted[index_1:index_2])
+
+
+    plt.figure()
+    plt.scatter(temp_pred, errors)
+    plt.xlabel('air temperature')
+    plt.ylabel('prediction error')
+    plt.figure()
+    plt.plot(temp_range_mean, mean_errors_in_range)
+    plt.plot(temp_range_mean, np.sqrt(var_errors_in_range))
+    plt.legend(['mean error', 'standard deviation'])
+    plt.xlabel('Temperature')
+    plt.ylabel('Prediction error')
     plt.show()
-
-
 
 
     # Dated code

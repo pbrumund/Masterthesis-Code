@@ -21,8 +21,13 @@ def get_NWP(wind_table, time, steps=0, key="wind_speed_10m"):
     predicted_trajectory = np.concatenate([wind_table[key+"_sh"][i_start:i_start+6], 
                                            wind_table[key+"_mh"][i_start:i_start+6], 
                                            wind_table[key+"_lh"][i_start:]])    # Reconstruct the most recent NWP at the given time
-    
-    i = (6*r + time.minute//10 + steps)//6
+    predicted_times = np.concatenate([wind_table["times1_sh"][i_start:i_start+6], 
+                                           wind_table["times1_mh"][i_start:i_start+6], 
+                                           wind_table["times1_lh"][i_start:]])    # Reconstruct the most recent NWP at the given time
+    t_rounded = time.replace(minute=0)
+
+    i = np.where(predicted_times==(time+datetime.timedelta(minutes=10*steps)).replace(minute=0))[0][0]
+    # i = int((6*r + time.minute//10 + steps)//6)
     wind_interp = (predicted_trajectory[i+1]*(time+steps*datetime.timedelta(minutes=10)).minute/60 
                    + predicted_trajectory[i]*(1-(time+steps*datetime.timedelta(minutes=10)).minute/60))
     return wind_interp
