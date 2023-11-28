@@ -30,3 +30,7 @@ def get_GAST_model():
 
     gtg_GAST = GasTurbineGenerator(x, u, p, y, dxdt)
     return gtg_GAST
+
+if __name__ == "__main__":
+    gtg = get_GAST_model()
+    pass
