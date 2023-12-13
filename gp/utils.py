@@ -9,7 +9,7 @@ def get_NWP(wind_table, time, steps=0, key="wind_speed_10m"):
     Keyword Arguments:
     wind_table -- dictionary of NWP and measurements
     time -- time at current time step
-    steps -- number of steps to predict ahead
+    steps -- number of steps to predict ahead, >=0
     key -- string with name of value as in dict, standard: "wind_speed_10m"
     """
     r = time.hour % 6
@@ -40,6 +40,36 @@ def get_wind_value(wind_table, time, steps=0):
     return wind_table['meas'][i]
 
 def generate_features(weather_data, time, n_last=3, feature='error', steps_ahead = 1):
+    cape = get_NWP(weather_data, time, steps_ahead, 'specific_convective_available_potential_energy')
+    sqrt_cape = np.sqrt(cape)
+    temperature = get_NWP(weather_data, time, steps_ahead, 'air_temperature_2m')
+    humidity = get_NWP(weather_data, time, steps_ahead, 'relative_humidity_2m')
+    wind_speed_of_gust = get_NWP(weather_data, time, steps_ahead, 'wind_speed_of_gust_diff')
+    wind_prediction_at_step = get_NWP(weather_data, time, steps_ahead, 'wind_speed_10m')
+    # wind_speed_of_gust -= wind_prediction_at_step
+    pressure = get_NWP(weather_data, time, steps_ahead, 'air_pressure_at_sea_level')
+
+    # Normalize inputs
+    sqrt_cape = ((sqrt_cape-weather_data['means']['sqrt_specific_convective_available_potential_energy_sh'])
+        /weather_data['std']['sqrt_specific_convective_available_potential_energy_sh'])
+    temperature = ((temperature-weather_data['means']['air_temperature_2m_sh'])
+                   /weather_data['std']['air_temperature_2m_sh'])
+    humidity = ((humidity-weather_data['means']['relative_humidity_2m_sh'])
+                 /weather_data['std']['relative_humidity_2m_sh'])
+    pressure = ((pressure-weather_data['means']['air_pressure_at_sea_level_sh'])
+                 /weather_data['std']['air_pressure_at_sea_level_sh'])
+    wind_prediction_at_step = ((wind_prediction_at_step - weather_data['means']['wind_speed_10m_sh'])
+                               /weather_data['std']['wind_speed_10m_sh'])
+    wind_speed_of_gust = ((wind_speed_of_gust - weather_data['means']['wind_speed_of_gust_diff_sh'])
+                           /weather_data['std']['wind_speed_of_gust_diff_sh'])
+    NWP_values = [wind_prediction_at_step, wind_speed_of_gust, sqrt_cape, temperature, humidity, pressure]
+
+    if feature == 'nwp': return np.array(NWP_values)
+    elif feature == 'nwp & time':
+        dt = time+steps_ahead*datetime.timedelta(minutes=10)-weather_data['times_meas'][0]
+        t_out = dt.total_seconds()/(60*60*24)
+        return np.concatenate([NWP_values, [t_out]])
+
     measurements = np.zeros(n_last)
     wind_predictions = np.zeros(n_last)
 
@@ -47,19 +77,10 @@ def generate_features(weather_data, time, n_last=3, feature='error', steps_ahead
     for i in range(n_last):
         measurements[i] = get_wind_value(weather_data, start_time, i)
         wind_predictions[i] = get_NWP(weather_data, start_time, i, 'wind_speed_10m')
-    
-    cape = get_NWP(weather_data, time, steps_ahead, 'specific_convective_available_potential_energy')
-    temperature = get_NWP(weather_data, time, steps_ahead, 'air_temperature_2m')
-    wind_prediction_at_step = get_NWP(weather_data, time, steps_ahead, 'wind_speed_10m')
-    errors = measurements - wind_predictions
 
-    # Normalize inputs
-    # measurements = (measurements-weather_data['mean_meas'])/weather_data['std_meas']
-    # wind_predictions = (wind_predictions-weather_data['mean_pred'])/weather_data['std_pred']
-    # errors = (errors-weather_data['mean_error'])/weather_data['std_error']
-    sqrt_cape = np.sqrt(cape)
-    # sqrt_cape = (sqrt_cape-weather_data['mean_cape'])/weather_data['std_cape']
-    # temperature = (temperature-weather_data['mean_temp'])/weather_data['std_temp']
+    errors = measurements - wind_predictions
+    
+    
 
     if feature == 'error':
         return errors
@@ -72,13 +93,13 @@ def generate_features(weather_data, time, n_last=3, feature='error', steps_ahead
     elif feature == 'prediction & measurement':
         return np.concatenate([measurements, wind_prediction_at_step])
     elif feature == 'error & nwp':
-        return np.concatenate([errors, [measurements[-1], wind_prediction_at_step, sqrt_cape, temperature]])
+        return np.concatenate([errors, [measurements[-1]], NWP_values])
     elif feature == 'error & nwp & time':
-        return np.concatenate([errors, [measurements[-1], wind_prediction_at_step, sqrt_cape, temperature, steps_ahead]])
+        return np.concatenate([errors, [measurements[-1]], NWP_values])
     elif feature == 'measurement & nwp':
-        return np.concatenate([measurements, [wind_prediction_at_step, sqrt_cape, temperature]])
+        return np.concatenate([measurements, NWP_values])
     elif feature == 'measurement & nwp & time':
-        return np.concatenate([measurements, [wind_prediction_at_step, sqrt_cape, temperature, steps_ahead]])
+        return np.concatenate([measurements, NWP_values])
     else:
         raise ValueError("Unknown value for feature")
 
@@ -120,7 +141,7 @@ def sparsify_training_data(X, y, M):
         return X_train_mean, y_train_mean
 
 
-def estimate_variance(X, y, M):
+def estimate_variance(X, y, M=None, indices=None, n_closest=50):
     # normalize x for every dimension
     n_inputs = X.shape[1]
     X_norm = np.zeros(X.shape)
@@ -137,12 +158,16 @@ def estimate_variance(X, y, M):
             var_x[i] = 1
     
     #draw random points
-    n_points = M
-    n_points = min(n_points, len(y))
-    rand_indices = random.sample(range(len(y)), n_points)
+    if indices is not None:
+        rand_indices = indices
+        n_points = len(indices)
+    else:
+        n_points = M
+        n_points = min(n_points, len(y))
+        rand_indices = random.sample(range(len(y)), n_points)
 
     #find n_closest closest neighbors
-    n_closest = 50
+    # n_closest = 50
     n_closest = min(n_closest, len(y))
     X_mean = np.zeros((n_points, n_inputs))
     y_var = np.zeros(n_points)
@@ -158,10 +183,11 @@ def estimate_variance(X, y, M):
         y_closest = np.array([y_others[k] for k in d_sort])
         X_mean[i,:] = np.multiply(np.mean(X_closest, axis=1), np.sqrt(var_x))
         y_var[i] = np.var(y_closest)
+        print(f'estimating variance at inducing variable {i+1}/{n_points}')
 
     X_train_var = X_mean
     mean_var = np.mean(y_var)
-    y_train_var = np.reshape(np.log(y_var), (-1,1))
+    y_train_var = np.reshape(np.log(np.sqrt(y_var)), (-1,1))
     return X_train_var, y_train_var
         
 def add_variance(weather_data):
@@ -177,3 +203,54 @@ def add_variance(weather_data):
     weather_data['mean_meas'] = np.mean(weather_data['meas'])
     weather_data['std_meas'] = np.sqrt(np.var(weather_data['meas']))
     return weather_data
+
+def get_new_input(weather_data, time, x_last, new_prediction, steps_ahead, opt):
+    x_last = x_last.T
+    input_feature = opt['input_feature']
+    if 'time' in input_feature:
+        k = x_last[-1] + 1
+        x_last = x_last[:-1] 
+    if 'nwp' in input_feature:
+        cape = get_NWP(weather_data, time, steps_ahead, 'specific_convective_available_potential_energy')
+        sqrt_cape = np.sqrt(cape)
+        temperature = get_NWP(weather_data, time, steps_ahead, 'air_temperature_2m')
+        wind_prediction_at_step = get_NWP(weather_data, time, steps_ahead, 'wind_speed_10m')
+        humidity = get_NWP(weather_data, time, steps_ahead, 'relative_humidity_2m')
+        wind_speed_of_gust = get_NWP(weather_data, time, steps_ahead, 'wind_speed_of_gust')
+        x_NWP = np.array([
+            wind_prediction_at_step, wind_speed_of_gust, sqrt_cape, temperature, humidity])
+        # x_NWP = np.array([wind_prediction_at_step, sqrt_cape, temperature])
+        if 'error' in input_feature:
+            x_last = x_last[:-6]
+        else:
+            x_last = x_last[:-5]
+    elif 'measurement' in input_feature:
+        wind_prediction_at_step = get_NWP(weather_data, time, steps_ahead, 'wind_speed_10m')
+        x_last = x_last[:-1]
+    x_last = x_last[1:]
+    label = opt['label']
+    prediction_NWP = get_NWP(weather_data, time, steps_ahead-1, 'wind_speed_10m')
+    if label == 'error':
+        wind_predicted = new_prediction + prediction_NWP
+    elif label == 'measurement':
+        wind_predicted = new_prediction
+    elif label == 'change of wind speed':
+        wind_now = get_wind_value(weather_data, time, 0)
+        wind_predicted = wind_now + new_prediction
+    else:
+        raise ValueError('Unknown value for label')
+    if 'error' in input_feature:
+        x_new = wind_predicted - prediction_NWP
+    elif 'measurement' in input_feature:
+        x_new = wind_predicted
+    x_out = np.append(x_last, x_new)
+    if 'error' in input_feature:
+        x_out = np.append(x_out, wind_predicted)
+    #elif 'measurement' in input_feature:
+    #    x_out = np.append(x_out, wind_prediction_at_step)
+    if 'nwp' in input_feature:
+        x_out = np.append(x_out, x_NWP)
+    
+    if 'time' in input_feature:
+        x_out = np.append(x_out, k)
+    return x_out.reshape((1,-1))

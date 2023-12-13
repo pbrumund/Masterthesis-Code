@@ -1,7 +1,6 @@
 # Adapted from https://frost.met.no/python_example.html
 import requests
 import datetime
-import pandas as pd
 import numpy as np
 
 fp = "../Winddaten/Frost_API_credentials.txt"

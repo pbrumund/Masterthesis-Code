@@ -50,6 +50,16 @@ def get_shepherd_model() -> Battery:
     battery_shepherd_model = Battery(x, u, p, y, dxdt)
     return battery_shepherd_model
 
+def get_shepherd_model_LiIon():
+    battery = get_shepherd_model()
+    battery.set_parameter('E0', 3.7348)
+    battery.set_parameter('R', 0.09)
+    battery.set_parameter('K', 0.00876)
+    battery.set_parameter('A', 0.468)
+    battery.set_parameter('B', 3.5294/3600)
+    return battery
+
+
 if __name__ == "__main__":
     battery = get_shepherd_model()
     pass

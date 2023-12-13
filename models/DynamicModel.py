@@ -66,9 +66,9 @@ class DynamicModel():
         self._np = self._p.shape[0]
         self._parameter_names = list(p.keys())
 
-    @property
-    def parameter_values(self):
-        return self._param_values
+    # @property
+    # def parameter_values(self):
+    #     return self._param_values
     
     @property
     def np(self):
@@ -100,6 +100,11 @@ class DynamicModel():
     
     @outputs.setter
     def outputs(self, y: ca.SX.sym):
+        if isinstance(y, ca.Function):
+            self._ny = y.n_out()
+            self._y = ca.SX.sym('y', self._ny)
+            self._outfun = y
+            return
         self._y = y
         self._ny = y.shape[0]
         if self._w is not None:
@@ -141,6 +146,8 @@ class DynamicModel():
 
     @property
     def parameter_values(self):
+        if self._param_values is None:
+            return ca.SX([])
         return self._param_values    
     
     def set_parameter_values(self, p):

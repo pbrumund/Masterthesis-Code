@@ -17,12 +17,12 @@ def get_training_data(weather_data, opt):
     input_feature = opt['input_feature']
     label = opt['label']
     steps_ahead = opt['steps_ahead']
-    filename_X = f'X_train_{order}_last_{input_feature}_{label}_{steps_ahead}step.txt'
-    filename_y = f'y_train_{order}_last_{input_feature}_{label}_{steps_ahead}step.txt'
+    filename_X = f'gp\\training_data\X_train_{order}_last_{input_feature}_{label}_{steps_ahead}step.txt'
+    filename_y = f'gp\\training_data\y_train_{order}_last_{input_feature}_{label}_{steps_ahead}step.txt'
     try:
         # If training data has been generated before, load it from file
         X_train = np.loadtxt(filename_X)
-        y_train = np.loadtxt(filename_y)
+        y_train = np.loadtxt(filename_y).reshape((-1,1))
         print('loaded data from file')
     except:
         # generate training data
@@ -63,42 +63,28 @@ def get_training_data(weather_data, opt):
 
 
 
-def get_iterative_model(weather_data, opt):
-    load = False
+def get_gp(weather_data, opt):
     order = opt['order']
-    n_samples = opt['n_samples']
     input_feature = opt['input_feature']
     label = opt['label']
-    steps_ahead = steps_ahead
-    if load:
-        X_train = np.loadtxt(f'X_train_{steps_ahead}steps.txt')
-        y_train = np.loadtxt(f'y_train_{steps_ahead}steps.txt').reshape((-1,1))
-    else:
-        X_train, y_train = utils.sample_random_inputs(
-            weather_data, n_samples, order, input_feature, label, steps_ahead=steps_ahead)
+    steps_ahead = opt['steps_ahead']
+
+    filename_gp = f'gp\gp_direct_{order}_last_{input_feature.replace(" ", "_")}_{label}_{steps_ahead}step'
+    try:
+        gp = tf.saved_model.load(filename_gp)
+        print('loaded gp from file')
+        return gp
+    except:
+        pass
+    print(f'training gp for {steps_ahead} steps ahead')
+    X_train, y_train = get_training_data(weather_data, opt)
     n_inputs = X_train.shape[1]
+    n_samples = X_train.shape[0]
 
     likelihood = gpf.likelihoods.HeteroskedasticTFPConditional(scale_transform=tfp.bijectors.Exp())
-    if 'time' in input_feature:
-        kernel_mean = (gpf.kernels.SquaredExponential(
-            # lengthscales=[5]*(n_inputs-1), active_dims = list(range(n_inputs-1)))
-                lengthscales=[5]*(order), active_dims = list(range(order)))
-            * gpf.kernels.SquaredExponential(
-                lengthscales=[5]*(n_inputs-1-order), active_dims = list(range(order, n_inputs-1)))
-            # * gpf.kernels.SquaredExponential(active_dims=[n_inputs-1]))
-            # + gpf.kernels.White()
-        )
-        kernel_var = (gpf.kernels.SquaredExponential(
-            # lengthscales=[1]*(n_inputs-1), active_dims = list(range(n_inputs-1))) + 
-            lengthscales=[5]*(order), active_dims = list(range(order)))
-            * gpf.kernels.SquaredExponential(
-                lengthscales=[5]*(n_inputs-1-order), active_dims = list(range(order, n_inputs-1)))
-            * gpf.kernels.SquaredExponential(active_dims=[n_inputs-1])
-            # + gpf.kernels.White()
-            )
-    else:
-        kernel_mean = gpf.kernels.SquaredExponential(lengthscales=[1]*n_inputs)
-        kernel_var = gpf.kernels.SquaredExponential(lengthscales=[1]*n_inputs)
+
+    kernel_mean = gpf.kernels.SquaredExponential(lengthscales=[.1]*n_inputs) + gpf.kernels.Linear()
+    kernel_var = gpf.kernels.SquaredExponential(lengthscales=[.1]*n_inputs) + gpf.kernels.Linear()
     kernel = gpf.kernels.SeparateIndependent(
         [
             kernel_mean,
@@ -106,23 +92,11 @@ def get_iterative_model(weather_data, opt):
         ]
     )
     
-    n_z1 = opt['n_z1']
-    n_z2 = opt['n_z2']
-    if load:
-        Z1 = np.loadtxt('Z1.txt')
-        Z2 = np.loadtxt('Z2.txt')
-    else:
-        Z1, _ = utils.sample_random_inputs(
-            weather_data, n_z1, order, input_feature, label, max_steps_ahead=opt['steps_ahead'])
-        Z2, _ = utils.sample_random_inputs(
-            weather_data, n_z1, order, input_feature, label, max_steps_ahead=opt['steps_ahead'])
-    
-    # noise_add = np.random.normal(scale=0.01, size=Z1.shape)
-    # noise_add[:,-1] = 0
-    # Z1 = Z1 + noise_add
-    # noise_add = np.random.normal(scale=0.01, size=Z1.shape)
-    # noise_add[:,-1] = 0
-    # Z2 = Z2 + noise_add
+    n_z = opt['n_z']
+    i_Z1 = random.sample(range(n_samples), n_z)
+    i_Z2 = random.sample(range(n_samples), n_z)
+    Z1 = X_train[i_Z1, :]
+    Z2 = X_train[i_Z2, :]
 
     inducing_variable = gpf.inducing_variables.SeparateIndependentInducingVariables(
         [
@@ -138,7 +112,8 @@ def get_iterative_model(weather_data, opt):
         num_latent_gps=likelihood.latent_dim)
     # Train on subset of data
     n_train_1 = int(X_train.shape[0]/10)
-    loss_fn = gp.training_loss_closure((X_train[:n_train_1,:], y_train[:n_train_1,:]))
+    training_subset = random.sample(range(n_samples), n_train_1)
+    loss_fn = gp.training_loss_closure((X_train[training_subset,:], y_train[training_subset,:]))
 
     gpf.utilities.set_trainable(gp.q_mu, False)
     gpf.utilities.set_trainable(gp.q_sqrt, False)
@@ -148,67 +123,61 @@ def get_iterative_model(weather_data, opt):
 
     adam_vars = gp.trainable_variables
     adam_opt = tf.optimizers.Adam(0.1)
-
-    @tf.function
-    def training_step():
-        print(loss_fn())
-        natgrad_opt.minimize(loss_fn, variational_vars)
-        print(loss_fn())
-        adam_opt.minimize(loss_fn, adam_vars)
-        print(loss_fn())
     
-    max_epochs = opt['epochs_first_training']
-    loss_lb = opt['loss_lb']
-    for i in range(max_epochs+1):
-        try:
-            training_step()
-        except ValueError:
-            print('Likelihood is nan')
-            loss_fn = gp.training_loss_closure(
-                (X_train[:n_train_1,:], 
-                 y_train[:n_train_1,:]+np.random.normal(size=(n_train_1,1), scale=0.1))
-                 )
-        if loss_fn().numpy() < loss_lb:
-            break
-        if True:#opt['verbose'] and i%20==0:
-            print(f"Epoch {i} - Loss: {loss_fn().numpy() : .4f}")
+    config = gpf.config.Config(jitter=1e-3)
+    with gpf.config.as_context(config):
+        @tf.function
+        def training_step():
+            natgrad_opt.minimize(loss_fn, variational_vars)
+            adam_opt.minimize(loss_fn, adam_vars)
+        
+        max_epochs = opt['epochs_first_training']
+        loss_lb = opt['loss_lb']
+        for i in range(max_epochs+1):
+            try:
+                training_step()
+            except:
+                print('Likelihood is nan')
+                raise RuntimeError('Failed to train model')
+            if loss_fn().numpy() < loss_lb:
+                break
+            if True:#opt['verbose'] and i%20==0:
+                print(f"Epoch {i} - Loss: {loss_fn().numpy() : .4f}")
     
     # Second training on full data set
     loss_fn = gp.training_loss_closure((X_train, y_train))
-
-    # gpf.utilities.set_trainable(gp.q_mu, False)
-    # gpf.utilities.set_trainable(gp.q_sqrt, False)
-
-    # variational_vars = [(gp.q_mu, gp.q_sqrt)]
     natgrad_opt = gpf.optimizers.NaturalGradient(gamma=0.1)
-
-    # adam_vars = gp.trainable_variables
     adam_opt = tf.optimizers.Adam(0.1)
 
-    @tf.function
-    def training_step():
-        natgrad_opt.minimize(loss_fn, variational_vars)
-        adam_opt.minimize(loss_fn, adam_vars)
-    
-    max_epochs = opt['max_epochs_second_training']
-    loss_lb = opt['loss_lb']
-    for i in range(max_epochs+1):
-        try:
-            training_step()
-        except:
-            print('Likelihood is nan')
-            loss_fn = gp.training_loss_closure((
-                X_train, 
-                y_train+np.random.normal(size=y_train.shape, scale=0.1))
-                )
-        # print(adam_vars[2])
-        # print(adam_vars[5])
-        if loss_fn().numpy() < loss_lb:
-            break
-        if True:#opt['verbose'] and i%20==0:
-            print(f"Epoch {i} - Loss: {loss_fn().numpy() : .4f}")
-            
-    
+    with gpf.config.as_context(config):
+        @tf.function
+        def training_step():
+            natgrad_opt.minimize(loss_fn, variational_vars)
+            adam_opt.minimize(loss_fn, adam_vars)
+        
+        max_epochs = opt['max_epochs_second_training']
+        loss_lb = opt['loss_lb']
+        for i in range(max_epochs+1):
+            try:
+                training_step()
+            except:
+                print('Likelihood is nan')
+                raise RuntimeError('Failed to train model')
+            if loss_fn().numpy() < loss_lb:
+                break
+            if True:#opt['verbose'] and i%20==0:
+                print(f"Epoch {i} - Loss: {loss_fn().numpy() : .4f}")
+
+    # save gp
+    gp.compiled_predict_f = tf.function(
+        lambda x: gp.predict_f(x),
+        input_signature=[tf.TensorSpec(shape=[None, n_inputs], dtype=tf.float64)]
+    )
+    gp.compiled_predict_y = tf.function(
+        lambda x: gp.predict_y(x),
+        input_signature=[tf.TensorSpec(shape=[None, n_inputs], dtype=tf.float64)]
+    )
+    tf.saved_model.save(gp, filename_gp)
     return gp
 
 if __name__ == "__main__":
@@ -216,7 +185,7 @@ if __name__ == "__main__":
     end_time = datetime.datetime(2022,12,31)
     end_time_train = datetime.datetime(2021,12,31)
 
-    n_last = 4
+    n_last = 5
     input_feature = 'error & nwp'
     label = 'error'
     print(input_feature)
@@ -227,15 +196,28 @@ if __name__ == "__main__":
            'order': n_last,
            'input_feature': input_feature,
            'label': label,
-           'n_z1': 2000,
-           'n_z2': 200,
+           'n_z': 4000,
            'epochs_first_training': 100,
            'max_epochs_second_training': 100,
            'loss_lb': 10,
            'verbose': True,
-           'steps_ahead': 2,
+           'steps_ahead': 1,
            'multithread': True}
     
     weather_data = load_weather_data(start_time, end_time)
-    X_train, y_train = get_training_data(weather_data, opt)
+    for steps in range(1,60):
+        print(f'getting model for {steps} steps ahead')
+        opt_i = opt.copy()
+        opt_i['steps_ahead'] = steps
+        # X_train, y_train = get_training_data(weather_data, opt)
+        success = False
+        while not success:
+            try:
+                gp = get_gp(weather_data, opt_i)
+                success = True
+            except RuntimeError:
+                # Failed training, use half the number of inducing variables
+                print('failed to train model, reducing number of inducing variables')
+                opt_i['n_z'] = int(opt_i['n_z']/2)
+                print(f'Number of inducing variables: {opt_i["n_z"]}')
     pass

@@ -3,8 +3,6 @@
 import numpy as np
 import netCDF4
 import pyproj
-import matplotlib.pyplot as plt
-import matplotlib.dates as dt
 import datetime
 import csv
 import os.path
@@ -19,9 +17,9 @@ start_time = datetime.datetime(2020,1,1)
 end_time = datetime.datetime(2022,12,31)
 # variables of interest
 variables_1 = ["wind_speed_10m", "wind_direction_10m", "air_pressure_at_sea_level", "air_temperature_2m"]   # MET post-processed
-variables_2 = ["specific_convective_available_potential_energy"]#, "atmosphere_convective_inhibition"]    # MEPS
+variables_2 = ["specific_convective_available_potential_energy", "relative_humidity_2m", "cloud_base_altitude", "wind_speed_of_gust"]#, "atmosphere_convective_inhibition"]    # MEPS
 
-filename_save = start_time.strftime("%Y%m%d") + "-" + end_time.strftime("%Y%m%d") + "_forecast.csv"
+filename_save = "gp\\" + start_time.strftime("%Y%m%d") + "-" + end_time.strftime("%Y%m%d") + "_forecast_rerun.csv"
 end_time = end_time + datetime.timedelta(days=1)
 
 headers = []
@@ -33,8 +31,8 @@ if not os.path.exists(filename_save):
         writer.writerow(headers)
 else:   # load already downloaded predictions to find out last saved timestamp
     import fileloading
-    table = fileloading.load_forecast(start_time, end_time-datetime.timedelta(days=1))
-    last_pred_time = table['times1_sh'][-1]
+    table = fileloading.load_forecast(start_time, end_time-datetime.timedelta(days=1), filename=filename_save)
+    last_pred_time = table['times2_sh'][-1]
     start_time = last_pred_time.astype(datetime.datetime) + datetime.timedelta(hours=1)
     del table
 setup1 = True #only need to find grid index once
@@ -143,6 +141,7 @@ while(time < end_time):
                 else:
                     predictions2_i[variable] = ncfile.variables[variable][:,0,Iy2,Ix2]
             n_errors = 0
+            predictions2_i_last = predictions2_i
             break
         except:
             errors += 1
@@ -151,9 +150,10 @@ while(time < end_time):
                     errorfile.write(time.strftime("%d.%m.%Y. %H:%M: MEPS data missing\n"))
                     print('MEPS data missing')
                 for key in variables_2 + ["times2"]:
-                    predictions2_i[key] = predictions2_i[key][6:]
+                    predictions2_i_last[key] = predictions2_i_last[key][6:]
                 n_errors += 1
-    predictions_i.update(predictions2_i)
+    # predictions_i.update(predictions2_i)
+    predictions_i = predictions2_i_last
     if save:
         with open(filename_save, 'a') as file:
             v_list = []

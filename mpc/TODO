@@ -1,0 +1,7 @@
+Get trajectory
+get constraints (Energy, state/input, ode)
+get cost function
+get optimization problem
+get initial values
+solve optimization
+simulate

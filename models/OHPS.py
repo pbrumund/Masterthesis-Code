@@ -1,15 +1,16 @@
 from DynamicModel import DynamicModel
-from Battery import get_shepherd_model
+from Battery import get_shepherd_model_LiIon
 from GTG import get_GAST_model
 from WindTurbine import get_simple_power_curve_model
 
 import casadi as ca
+import numpy as np
 
 class OHPS(DynamicModel):
     def __init__(self):
         #self._w = None
         self.gtg = get_GAST_model()
-        self.battery = get_shepherd_model()
+        self.battery = get_shepherd_model_LiIon()
         self.wind_turbine = get_simple_power_curve_model()
 
         self.state = ca.vertcat(self.gtg.state, self.battery.state, self.wind_turbine.state)
@@ -27,6 +28,8 @@ class OHPS(DynamicModel):
 
         self.outputs = ca.vertcat(self.gtg.outputs, self.battery.outputs, self.wind_turbine.outputs)
         self.ode = ca.vertcat(self.gtg.ode, self.battery.ode, self.wind_turbine.ode)
+
+        self.gtg.set_parameter_values(ca.SX([0.5, 0.5, 4500]))
     
     @property
     def parameter_values(self):
