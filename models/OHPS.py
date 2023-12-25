@@ -10,7 +10,7 @@ class OHPS(DynamicModel):
     def __init__(self):
         #self._w = None
         self.gtg = get_GAST_model()
-        self.battery = get_shepherd_model_LiIon()
+        self.battery = get_shepherd_model_LiIon(N_s=170,N_p = 8000) #~5 MWh
         self.wind_turbine = get_simple_power_curve_model()
 
         self.state = ca.vertcat(self.gtg.state, self.battery.state, self.wind_turbine.state)

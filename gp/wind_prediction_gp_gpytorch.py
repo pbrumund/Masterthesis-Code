@@ -3,6 +3,7 @@ import numpy as np
 import random
 import datetime
 import gpytorch
+import torch
 import gpflow as gpf
 import tensorflow as tf
 import tensorflow_probability as tfp
@@ -11,16 +12,15 @@ import sklearn
 
 from multiprocessing import Pool
 
-import utils
-from fileloading import load_weather_data
-from posterior_kernel import PosteriorKernel, PosteriorMean
+from data_handling import DataHandler
+from posterior_gpytorch import TimeseriesGP
 
 
 class WindPredictionGP:
     def __init__(self, opt):
         t_start = opt['t_start']
         t_end = opt['t_end']
-        self.weather_data = load_weather_data(t_start, t_end)
+        self.data_handler = DataHandler(t_start, t_end, opt)
         self.opt = opt
 
     def get_training_data(self, opt):
@@ -36,20 +36,20 @@ class WindPredictionGP:
             print('generating data')
             start_datetime = self.opt['start_date_train']
             end_datetime = self.opt['end_date_train']
-            n_points = int((end_datetime-start_datetime)/datetime.timedelta(minutes=10))
-            times = [start_datetime + i*datetime.timedelta(minutes=10) for i in range(n_points)]
-            n_x = utils.generate_features(
-                self.weather_data, start_datetime, 1, opt['input_feature'], 0).shape[0]
+            n_points = int((end_datetime-start_datetime)/datetime.timedelta(minutes=self.opt['dt_meas']))
+            times = [start_datetime + i*datetime.timedelta(minutes=self.opt['dt_meas']) for i in range(n_points)]
+            n_x = self.data_handler.generate_features(
+                start_datetime, 1, opt['input_feature'], 0).shape[0]
             steps_ahead = opt['steps_ahead']
             
-            args_X = [(self.weather_data, time, 0, opt['input_feature'], steps_ahead) 
+            args_X = [(time, 0, opt['input_feature'], steps_ahead) 
                         for time in times]# for steps_ahead in range(1,max_steps_ahead)]
-            args_y = [(self.weather_data, time, opt['label'], steps_ahead)
+            args_y = [(time, opt['label'], steps_ahead)
                         for time in times]# for steps_ahead in range(1,max_steps_ahead)]
             with Pool(processes=12) as pool:
-                X_train = pool.starmap(utils.generate_features, args_X, chunksize=1000)
+                X_train = pool.starmap(self.data_handler.generate_features, args_X, chunksize=1000)
                 print('finished generating X_train')
-                y_train = pool.starmap(utils.generate_labels, args_y, chunksize=1000)
+                y_train = pool.starmap(self.data_handler.generate_labels, args_y, chunksize=1000)
                 print('finished generating y_train')
                 X_train = np.array(X_train).reshape((n_points, n_x))
                 y_train = np.array(y_train).reshape((n_points, 1))
@@ -69,6 +69,8 @@ class PriorOnTimeseriesGP(WindPredictionGP):
         if not is_trained:
             self.train_prior_gp(self.X_train, self.y_train)
         self.timeseries_gp_param = None
+        self.gp_predictions = None
+        self.t_last_train = None
 
 
     def get_training_data_prior(self):
@@ -93,7 +95,7 @@ class PriorOnTimeseriesGP(WindPredictionGP):
             if X_train is None:
                 raise RuntimeError('tried to fit gp without providing training data')
         print(f'training gp for prior mean and variance')
-        # X_train, y_train = self.get_training_data_prior()
+
         n_inputs = X_train.shape[1]
         n_samples = X_train.shape[0]
 
@@ -107,12 +109,8 @@ class PriorOnTimeseriesGP(WindPredictionGP):
             gpf.kernels.RationalQuadratic(lengthscales=[.3], active_dims=[i]) for i in range(n_inputs-1)
         ])
 
-        # kernels_nwp_var = gpf.kernels.RationalQuadratic(
-        #     lengthscales=[.1]*(n_inputs-1), active_dims=range(n_inputs-1))
 
         kernel_mean = (
-            # gpf.kernels.RationalQuadratic(
-            #     lengthscales=[1]*(n_inputs-1), active_dims = range(n_inputs-1)) 
             kernels_nwp_mean
             + gpf.kernels.Periodic(
                 gpf.kernels.SquaredExponential(active_dims=[n_inputs-1]), period=365) 
@@ -121,8 +119,6 @@ class PriorOnTimeseriesGP(WindPredictionGP):
         gpf.set_trainable(kernel_mean.submodules[6].period, False)
         gpf.set_trainable(kernel_mean.submodules[7].period, False)
         kernel_var = (
-            # gpf.kernels.RationalQuadratic(
-            #    lengthscales=[.1]*(n_inputs-1), active_dims = range(n_inputs-1)) 
             kernels_nwp_var
             + gpf.kernels.Periodic(
                 gpf.kernels.SquaredExponential(active_dims=[n_inputs-1]), period=365) 
@@ -136,22 +132,8 @@ class PriorOnTimeseriesGP(WindPredictionGP):
                 kernel_var
             ]
         )
-       
-        A = np.zeros((n_inputs, 2))
-        b = np.zeros((2))
         
-        class LinearMeanNWP(gpf.functions.Linear):
-            def __call__(self, X: TensorType):
-                return tf.tensordot(X[...,:-1], self.A[:-1,:], [[-1], [0]]) + self.b
-
-        class LinearMeanNWPMean(gpf.functions.Linear):
-            def __call__(self, X: TensorType):
-                return tf.tensordot(X[...,0,:-1], self.A[:-1,1], [[-1], [0]]) + self.b
-        
-        # mean = LinearMeanNWP(A, b)
-        # mean = LinearMeanNWPMean(A, b)
         mean = gpf.functions.Constant(np.zeros(2))
-        # mean = gpf.functions.Zero()
         
         n_z = self.opt['n_z']
         i_Z1 = random.sample(range(n_samples), n_z)
@@ -166,20 +148,12 @@ class PriorOnTimeseriesGP(WindPredictionGP):
             ]
         )
 
-        # _, var_0 = utils.estimate_variance(X_train, y_train, indices=i_Z2)
-        # q_mu_mean = tf.zeros((n_z, 1))
-        # q_mu_var = tf.convert_to_tensor(var_0, dtype=float)
-        # q_mu = tf.concat([q_mu_mean, q_mu_var], axis=1)
-        # self.q_mu_init = q_mu
-        
         gp_prior = gpf.models.SVGP(
             kernel=kernel, 
             likelihood=likelihood, 
             inducing_variable=inducing_variable,
             num_latent_gps=likelihood.latent_dim,
             mean_function=mean,
-            # q_mu=q_mu
-            # q_diag=True
             )
         return gp_prior, False
         
@@ -299,96 +273,140 @@ class PriorOnTimeseriesGP(WindPredictionGP):
             return tf.convert_to_tensor(np.array(x))
 
         s = tf.get_static_value(steps, partial=True)
-        steps = int(s[0])
+        steps = float(s[0])
         
         if steps < 0:
             # time before current time, training
-            t = time+steps*datetime.timedelta(minutes=10)
-            x = utils.generate_features(
-                self.weather_data, t, feature='nwp & time', steps_ahead=0).reshape((1,-1))
+            t = time+steps*datetime.timedelta(minutes=self.opt['dt_meas'])
+            x = self.data_handler.generate_features(
+                    t, feature='nwp & time', steps_ahead=0).reshape((1,-1))
         else:
             # time after current time, predicting
-            x = utils.generate_features(
-                self.weather_data, time, feature='nwp & time', steps_ahead=steps).reshape((1,-1))
+            x = self.data_handler.generate_features(
+                    time, feature='nwp & time', steps_ahead=steps).reshape((1,-1))
         return x
     
     def get_timeseries_gp(self, prediction_time):
         """Set up a GP to predict wind speeds based on previous measurements, 
         using the GP based on NWP data as a prior"""
         n_last = self.opt['n_last']
-        X_train = np.arange(start=-n_last, stop=0)
-        y_train = np.zeros(n_last)
-        t_start = prediction_time - n_last*datetime.timedelta(minutes=10)
-        times = [t_start + i*datetime.timedelta(minutes=10) for i in range(n_last)]
+        if self.t_last_train is not None:
+            i_shift = (prediction_time-self.t_last_train).total_seconds()/(self.opt['dt_meas']*60)
+        else:
+            i_shift = 0
+        X_train = torch.arange(start=-n_last+i_shift, end=i_shift).double().reshape((-1,1))
+        y_train = torch.zeros(n_last).double()
+        self.X_train_timeseries = X_train
+        self.y_train_timeseries = y_train
+        t_start = prediction_time - n_last*datetime.timedelta(minutes=self.opt['dt_meas'])
+        times = [t_start + i*datetime.timedelta(minutes=self.opt['dt_meas']) for i in range(n_last)]
 
         for i, t in enumerate(times):
-            measurement = utils.get_wind_value(self.weather_data, t, 0)
-            prediction = utils.get_NWP(self.weather_data, t, 0)
+            measurement = self.data_handler.get_measurement(t, 0)
+            prediction = self.data_handler.get_NWP(t, 0)
             y_train[i] = measurement - prediction
-        X_train = X_train.reshape((-1,1)).astype(float)
-        y_train = y_train.reshape((-1,1))
         if self.timeseries_gp_param is None:
-            l_init = 20
-            sigma_f_init = 1
-            sigma_n_init = 1e-2
             self.first_train = True
         else:
-            l_init = self.timeseries_gp_param[0]
-            sigma_f_init = self.timeseries_gp_param[1]
-            sigma_n_init = self.timeseries_gp_param[2]
             self.first_train = False
-        
-        kernel = gpf.kernels.Matern12(lengthscales=l_init, variance=sigma_f_init)
-        likelihood = gpf.likelihoods.Gaussian(variance=sigma_n_init)
-        # gpf.set_trainable(kernel.variance, False)
-        get_x_fun = lambda x: self._get_in(prediction_time, x)
-        kernel_posterior = PosteriorKernel(
-            kernel, self.gp_prior, get_x_fun, cashing=opt['cashing'])
-        mean_posterior = PosteriorMean(self.gp_prior, get_x_fun, cashing=opt['cashing'])
-        gp_posterior = gpf.models.GPR(
-            (X_train, y_train),
-            kernel=kernel_posterior,
-            mean_function=mean_posterior,
-            likelihood=likelihood
-        )
-        return gp_posterior
+        likelihood = gpytorch.likelihoods.GaussianLikelihood()
+        get_x_fun = lambda x: self._get_in(self.t_last_train, x)
+        gp_timeseries = TimeseriesGP(
+            X_train, y_train, likelihood, self.gp_prior, get_x_fun, cashing=self.opt['cashing'],
+            gp_predictions=self.gp_predictions)
+        # initialize hyperparameters
+        if self.first_train:
+            gp_timeseries.covar_module.kernel.lengthscale = 20
+            gp_timeseries.covar_module.kernel.gamma = 0.5  
+            likelihood.noise = 1e-2
+        else:
+            gp_timeseries.covar_module.kernel.lengthscale = self.timeseries_gp_param[0]
+            gp_timeseries.covar_module.kernel.gamma = self.timeseries_gp_param[1]  
+            likelihood.noise = self.timeseries_gp_param[2] 
+        return gp_timeseries, likelihood
 
     def train_timeseries_gp(self):
-        train_vars = (self.gp_timeseries.trainable_variables[0], 
-                      self.gp_timeseries.trainable_variables[1], 
-                      self.gp_timeseries.trainable_variables[2])
-        adam_opt = tf.optimizers.Adam(0.5)
-        loss_fn = self.gp_timeseries.training_loss
-        config = gpf.config.Config(jitter=1e-1)
-        with gpf.config.as_context(config):
-            if self.first_train:
-                epochs = self.opt['epochs_timeseries_first_train']
-            else:
-                epochs = self.opt['epochs_timeseries_retrain']
-            for i in range(epochs):       
-                adam_opt.minimize(loss_fn, train_vars)
-                param = self.gp_timeseries.trainable_parameters
-                print((f'Epoch {i+1},' 
-                      f'l: {param[0].numpy()}, '
-                      f'variance scale: {param[1].numpy()}, '
-                      f'noise: {param[2].numpy()}, '
-                      f'loss: {loss_fn().numpy()}'))
-        self.timeseries_gp_param = self.gp_timeseries.trainable_parameters
+        self.gp_timeseries.train()
+        self.timeseries_likelihood.train()
+        # Different learning rates for length and variance scale
+        # optimizer_l = torch.optim.Adam(
+        #     [self.gp_timeseries.covar_module.kernel.base_kernel.raw_lengthscale,
+        #      self.timeseries_likelihood.raw_noise], lr=0.1
+        # )
+        # optimizer_sigma = torch.optim.Adam(
+        #     [self.gp_timeseries.covar_module.kernel.raw_outputscale], lr=0.1
+        # )
+        optimizer = torch.optim.Adam(
+            self.gp_timeseries.parameters(), lr=0.2)
+        mll = gpytorch.mlls.ExactMarginalLogLikelihood(
+            self.timeseries_likelihood, self.gp_timeseries)
+        if self.first_train:
+            epochs = self.opt['epochs_timeseries_first_train']
+        else:
+            epochs = self.opt['epochs_timeseries_retrain']
+        for i in range(epochs):
+            optimizer.zero_grad()
+            # optimizer_l.zero_grad()
+            # optimizer_sigma.zero_grad()
+            output = self.gp_timeseries(self.X_train_timeseries)
+            loss = -mll(output, self.y_train_timeseries)
+            loss.backward()
+            param_vals = [
+                self.gp_timeseries.covar_module.kernel.lengthscale.item(),
+                self.gp_timeseries.covar_module.kernel.gamma.item(),
+                # self.gp_timeseries.covar_module.kernel.outputscale.item(),
+                self.timeseries_likelihood.noise.item()
+            ]
+            print(f'Epoch {i+1}: '
+                  f'l: {param_vals[0]}, '
+                #   f'variance scale: {param_vals[1]}, '
+                  f'gamma: {param_vals[1]}, '
+                  f'noise: {param_vals[2]}, '
+                  f'loss: {loss.item()}')
+            optimizer.step()
+            # optimizer_l.step()
+            # optimizer_sigma.step()
+        self.timeseries_gp_param = param_vals
+
+    def reset_timeseries_gp_hyperparameters(self):
+        if hasattr(self, 'gp_timeseries'):
+            self.gp_timeseries.covar_module.kernel.lengthscale = 20
+            # self.gp_timeseries.covar_module.kernel.outputscale = 1    
+            self.timeseries_likelihood.noise = 1e-2
+            self.gp_timeseries.covar_module.kernel.gamma = 0.5
     
     def predict_trajectory(self, start_time, steps, train=False):
+        dt = 0  # if start time is not multiple of 10 min, difference to last previous multiple to shift indices
+        if start_time.minute%self.opt['dt_meas'] != 0:
+            dt = start_time.minute%self.opt['dt_meas']
+            start_time = start_time.replace(minute=start_time.minute//self.opt['dt_meas']*self.opt['dt_meas'])
         """Set up the timeseries GP and train if required, then predict a number of steps ahead"""
-        self.gp_timeseries = self.get_timeseries_gp(prediction_time=start_time)
         if train:
+            self.gp_predictions = None
+            self.t_last_train = start_time
+            self.gp_timeseries, self.timeseries_likelihood = self.get_timeseries_gp(
+                prediction_time=start_time)
+            self.reset_timeseries_gp_hyperparameters()
             self.train_timeseries_gp()
-        x = np.arange(steps).reshape((-1,1)).astype(float)
-        x = tf.convert_to_tensor(x)
-        gp_mean, gp_var = self.gp_timeseries.predict_y(x)
-        NWP_pred = [utils.get_NWP(self.weather_data, start_time, i) for i in range(steps)]
-        gp_pred = np.array(NWP_pred).reshape((-1,1)) + gp_mean
-        return gp_pred.numpy()[:,0], gp_var.numpy()[:,0]
+        else:
+            self.gp_timeseries, self.timeseries_likelihood = self.get_timeseries_gp(
+            prediction_time=start_time)
+        self.gp_timeseries.eval()
+        self.timeseries_likelihood.eval()
+        i_shift = (start_time-self.t_last_train).total_seconds()/(self.opt['dt_meas']*60)
+        dt_factor = self.opt['dt_pred']/self.opt['dt_meas']
+        x = ((np.arange(steps))*dt_factor+i_shift+dt/self.opt['dt_meas']).reshape((-1,1)).astype(float)
+        x = torch.from_numpy(x)
+        gp_pred_y = self.timeseries_likelihood(self.gp_timeseries(x))
+        gp_mean, gp_var = gp_pred_y.mean, gp_pred_y.variance
+        # gp_mean, gp_var = self.gp_timeseries.predict_y(x)
+        NWP_pred = [self.data_handler.get_NWP(start_time, i*dt_factor) for i in range(steps)]
+        gp_pred = np.array(NWP_pred).reshape((-1,1)) + gp_mean.reshape((-1,1)).detach().numpy()
+        self.gp_predictions = self.gp_timeseries.covar_module.gp_predictions
+        return gp_pred[:,0], gp_var.detach().numpy()
     
     def plot_prior(self, start_time, steps):
-        times = [start_time+i*datetime.timedelta(minutes=10) for i in range(steps)]
+        times = [start_time+i*datetime.timedelta(minutes=self.opt['dt_meas']) for i in range(steps)]
 
         NWP_traj = np.zeros(steps)
         mean_traj = np.zeros(steps)
@@ -397,9 +415,9 @@ class PriorOnTimeseriesGP(WindPredictionGP):
         meas_traj = np.zeros(steps)
 
         for i, t in enumerate(times):
-            NWP_traj[i] = utils.get_NWP(self.weather_data, t, 0)
-            meas_traj[i] = utils.get_wind_value(self.weather_data, t, 0)
-            x = utils.generate_features(self.weather_data, t, feature='nwp & time').reshape((1,-1))
+            NWP_traj[i] = self.data_handler.get_NWP(t, 0)
+            meas_traj[i] = self.data_handler.get_measurement(t, 0)
+            x = self.data_handler.generate_features(t, feature='nwp & time').reshape((1,-1))
             mean, var = self.gp_prior.compiled_predict_y(x)
             mean_f, _ = self.gp_prior.compiled_predict_f(x)
             mean_traj[i] = mean
@@ -429,10 +447,10 @@ class PriorOnTimeseriesGP(WindPredictionGP):
         plt.legend(['total uncertainty', 'uncertainty of mean', 'estimated heteroscedastic noise'])
 
     def plot_prior_distribution(self, start_time, stop_time):
-        steps = int((stop_time - start_time).total_seconds()/(60*10))
-        times = [start_time+i*datetime.timedelta(minutes=10) for i in range(steps)]
+        steps = int((stop_time - start_time).total_seconds()/(60*self.opt['dt_meas']))
+        times = [start_time+i*datetime.timedelta(minutes=self.opt['dt_meas']) for i in range(steps)]
 
-        x = utils.generate_features(self.weather_data, start_time, feature='nwp & time').reshape((1,-1))
+        x = self.data_handler.generate_features(start_time, feature='nwp & time').reshape((1,-1))
         n_inputs = x.shape[1]
 
         x_mat = np.zeros((steps, n_inputs))
@@ -440,7 +458,7 @@ class PriorOnTimeseriesGP(WindPredictionGP):
         var_traj = np.zeros(steps)
 
         for i, t in enumerate(times):
-            x = utils.generate_features(self.weather_data, t, feature='nwp & time').reshape((1,-1))
+            x = self.data_handler.generate_features(t, feature='nwp & time').reshape((1,-1))
             x_mat[i,:] = x  
             mean, var = self.gp_prior.compiled_predict_y(x)
             mean_traj[i] = mean
@@ -485,14 +503,15 @@ class PriorOnTimeseriesGP(WindPredictionGP):
 
     def plot_posterior(self, start_time, steps, train=False):
         gp_pred_traj, gp_var = self.predict_trajectory(start_time, steps, train)
-        times = [start_time+i*datetime.timedelta(minutes=10) for i in range(steps)]
+        times = [start_time+i*datetime.timedelta(minutes=self.opt['dt_pred']) for i in range(steps)]
         
         NWP_traj = np.zeros(steps)
         meas_traj = np.zeros(steps)
 
         for i, t in enumerate(times):
-                NWP_traj[i] = utils.get_NWP(self.weather_data, t, 0)
-                meas_traj[i] = utils.get_wind_value(self.weather_data, t, 0)
+                NWP_traj[i] = self.data_handler.get_NWP(
+                    start_time, i*self.opt['dt_pred']/self.opt['dt_meas'])
+                meas_traj[i] = self.data_handler.get_measurement(t, 0)
 
         std_traj = np.sqrt(gp_var)
 
@@ -505,10 +524,10 @@ class PriorOnTimeseriesGP(WindPredictionGP):
         plt.xlabel('time')
         plt.ylabel('wind speed')
         plt.legend(['Weather prediction', 'Actual wind speed', 'Timeseries GP prediction'])
-        plt.figure()
-        plt.plot(times, std_traj)
-        plt.xlabel('time')
-        plt.ylabel('predicted uncertainty')
+        # plt.figure()
+        # plt.plot(times, std_traj)
+        # plt.xlabel('time')
+        # plt.ylabel('predicted uncertainty')
 
     
 if __name__ == '__main__':
@@ -517,9 +536,11 @@ if __name__ == '__main__':
     
     gp = PriorOnTimeseriesGP(opt)
     t_start_predict = datetime.datetime(2022,8,1,1)
-    steps = 60
+    steps = 120
     # gp.plot_prior(t_start_predict, steps)
     gp.plot_posterior(t_start_predict, steps, train=True)
+    for i in range(1,10):
+        gp.plot_posterior(t_start_predict + i*datetime.timedelta(minutes=5), steps, train=False)
     # t_start_predict = datetime.datetime(2022,1,1,1)
     # steps = 60
     # gp.plot_prior(t_start_predict, steps)

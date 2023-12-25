@@ -12,7 +12,6 @@ def get_NWP(wind_table, time, steps=0, key="wind_speed_10m"):
     steps -- number of steps to predict ahead, >=0
     key -- string with name of value as in dict, standard: "wind_speed_10m"
     """
-    r = time.hour % 6
     if key in ["wind_speed_10m", "wind_direction_10m", "air_pressure_at_sea_level", "air_temperature_2m"]:   # MET post-processed
         times_sh = wind_table["times1_sh"]
     else:
@@ -25,7 +24,7 @@ def get_NWP(wind_table, time, steps=0, key="wind_speed_10m"):
     predicted_times = np.concatenate([wind_table["times1_sh"][i_start:i_start+6], 
                                            wind_table["times1_mh"][i_start:i_start+6], 
                                            wind_table["times1_lh"][i_start:]])    # Reconstruct the most recent NWP at the given time
-    t_rounded = time.replace(minute=0)
+    # t_rounded = time.replace(minute=0)
 
     i = np.where(predicted_times==(time+datetime.timedelta(minutes=10*steps)).replace(minute=0))[0][0]
     # i = int((6*r + time.minute//10 + steps)//6)
@@ -35,6 +34,14 @@ def get_NWP(wind_table, time, steps=0, key="wind_speed_10m"):
 
 def get_wind_value(wind_table, time, steps=0):
     """Returns measured wind speed, inputs as in get_NWP"""
+    if time.minute%10 != 0:
+        steps += time.minute%10/10
+        time = time.replace(minute=time.minute//10*10)
+    if steps%1 != 0:
+        a = steps%1
+        return (a*get_wind_value(wind_table, time, np.ceil(steps))
+                 + (1-a)*get_wind_value(wind_table, time, np.floor(steps)))
+    steps = int(steps)
     dt = time - wind_table['times_meas'][0]
     i = int(dt.total_seconds()/600) + steps
     return wind_table['meas'][i]

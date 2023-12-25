@@ -12,13 +12,16 @@ def get_gp_opt(**kwargs):
            'epochs_timeseries_retrain': 10,
            'loss_lb': 0.5,
            'verbose': True,
-           'n_last': 432,   # 3 days
+           'n_last': 144,   # 1 day
            'train_posterior': True,
-           'steps_forward': 100,
+           'steps_forward': 60,
            't_start_score': datetime.datetime(2022,1,1),
            't_end_score': datetime.datetime(2022,12,31),
            'freq_retrain': 36,
-           'reselect_data': True
+           'reselect_data': True,
+           'cashing': True,
+           'dt_meas': 10,
+           'dt_pred': 10
            }
     opt.update(kwargs)
     return opt

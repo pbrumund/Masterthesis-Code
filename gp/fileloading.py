@@ -85,3 +85,37 @@ def load_weather_data(start_time, end_time, filename=None):
             'meas': wind_obs_interp}
     data.update(predictions)
     return data
+
+def load_forecast_dict(start_time=None, end_time=None, filename=None):
+    if filename is None:
+        filename = ('gp\\weather_data\\' + start_time.strftime("%Y%m%d") + "-" 
+                    + end_time.strftime("%Y%m%d") + "_forecast.csv")
+    prediction_dict = {}
+    with open(filename, mode="r") as f:
+        reader = csv.reader(f, delimiter=';')
+        headers = next(reader)
+        means_vec = next(reader)
+        std_vec = next(reader)
+        means = {}
+        std = {}
+        for i, var in enumerate(headers):
+            means[var] = float(means_vec[i])
+            std[var] = float(std_vec[i])
+        table = np.array(list(reader))
+        for i, h in enumerate(headers):
+            column_i = table[:,i]
+            if "times" in h:
+                column_i = np.asarray(column_i.astype(float), dtype='datetime64[s]')
+            else:
+                column_i = column_i.astype(float)
+            prediction_dict[h] = column_i
+    prediction_dict['means'] = means
+    prediction_dict['std'] = std
+    for i in range(len(headers)//3):
+        headers_short = headers[i][:-3]
+    # predicted_trajectory = np.concatenate([wind_table[key+"_sh"][i_start:i_start+6], 
+    #                                        wind_table[key+"_mh"][i_start:i_start+6], 
+    #                                        wind_table[key+"_lh"][i_start:]])    # Reconstruct the most recent NWP at the given time
+    # predicted_times = np.concatenate([wind_table["times1_sh"][i_start:i_start+6], 
+    #                                        wind_table["times1_mh"][i_start:i_start+6], 
+    #                                        wind_table["times1_lh"][i_start:]])    # Reconstruct the most recent NWP at the given time

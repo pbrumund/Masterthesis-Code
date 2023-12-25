@@ -123,22 +123,26 @@ if __name__ == "__main__":
     plt.show() """
 
     # Plot covariance of prediction error over number of steps ahead
-    """ max_horizon = 100
+    weather_data = fi.load_weather_data(start_time, end_time)
+    max_horizon = 100
     cov = np.zeros(max_horizon)
+
+    n_points = len(weather_data['times_meas']) - max_horizon
     for s in range(max_horizon):
-        prediction_errors = np.zeros(len(data_table['times_meas']) - max_horizon)
-        for i in range(len(data_table['times_meas']) - max_horizon):
-            prediction = get_prediction(data_table, time=data_table['times_meas'][i], steps=s)
-            prediction_errors[i] = get_wind_value(data_table, time=data_table['times_meas'][i], steps=s) - prediction
+        prediction_errors = np.zeros(n_points)
+        for i in range(n_points):
+            prediction = ut.get_NWP(weather_data, weather_data['times_meas'][i], s)
+            measurement = ut.get_wind_value(weather_data, weather_data['times_meas'][i], s)
+            prediction_errors[i] = measurement - prediction
         if s == 0:
             prediction_errors_now = prediction_errors
         cov[s] = np.cov(prediction_errors, prediction_errors_now)[1,0]
 
     plt.figure()
     plt.plot(cov)
-    plt.xlabel('steps')
-    plt.ylabel('covariance')
-    plt.show() """
+    plt.xlabel('Number of predicted 10-minute-steps')
+    plt.ylabel('Covariance of prediction error')
+    plt.show()
 
     # Plot covariance of change of error
     """ 
@@ -619,55 +623,55 @@ if __name__ == "__main__":
     plt.show() """
 
     # plot error over temperature
-    # start_time = datetime.datetime(2020,1,1)
-    # end_time = datetime.datetime(2022,12,31)
-    # weather_data = fi.load_weather_data(start_time, end_time)
+    """ start_time = datetime.datetime(2020,1,1)
+    end_time = datetime.datetime(2022,12,31)
+    weather_data = fi.load_weather_data(start_time, end_time)
 
-    # n_points = len(weather_data['times_meas'])
-    # n_select = n_points
-    # selected_points = random.sample(range(n_points), n_select)
+    n_points = len(weather_data['times_meas'])
+    n_select = n_points
+    selected_points = random.sample(range(n_points), n_select)
 
-    # measurements = np.zeros(n_select)
-    # predictions = np.zeros(n_select)
-    # errors = np.zeros(n_select)
-    # nwp_val = np.zeros(n_select)
+    measurements = np.zeros(n_select)
+    predictions = np.zeros(n_select)
+    errors = np.zeros(n_select)
+    nwp_val = np.zeros(n_select)
 
-    # for i, k in enumerate(selected_points):
-    #     t = weather_data['times_meas'][k]
-    #     measurements[i] = ut.get_wind_value(weather_data, t, 0)
-    #     predictions[i] = ut.get_NWP(weather_data, t, 0, 'wind_speed_10m')
-    #     errors[i] = measurements[i] - predictions[i]
-    #     nwp_val[i] = ut.get_NWP(weather_data, t, 0, "wind_speed_of_gust") - predictions[i]
+    for i, k in enumerate(selected_points):
+        t = weather_data['times_meas'][k]
+        measurements[i] = ut.get_wind_value(weather_data, t, 0)
+        predictions[i] = ut.get_NWP(weather_data, t, 0, 'wind_speed_10m')
+        errors[i] = measurements[i] - predictions[i]
+        nwp_val[i] = ut.get_NWP(weather_data, t, 0, "wind_speed_of_gust") - predictions[i]
     
-    # nwp_val_sorted = np.sort(nwp_val)
-    # errors_sorted = errors[np.argsort(nwp_val)]
+    nwp_val_sorted = np.sort(nwp_val)
+    errors_sorted = errors[np.argsort(nwp_val)]
 
-    # bins = 10
-    # var_errors_in_range = np.zeros(bins)
-    # mean_errors_in_range = np.zeros(bins)
-    # nwp_range_mean = np.zeros(bins)
-    # for i in range(bins):
-    #     index_1 = int(n_select*i/bins)
-    #     index_2 = int(n_select*(i+1)/bins)
-    #     nwp_range_mean[i] = np.mean(nwp_val_sorted[index_1:index_2])
-    #     var_errors_in_range[i] = np.var(errors_sorted[index_1:index_2])
-    #     mean_errors_in_range[i] = np.mean(errors_sorted[index_1:index_2])
+    bins = 10
+    var_errors_in_range = np.zeros(bins)
+    mean_errors_in_range = np.zeros(bins)
+    nwp_range_mean = np.zeros(bins)
+    for i in range(bins):
+        index_1 = int(n_select*i/bins)
+        index_2 = int(n_select*(i+1)/bins)
+        nwp_range_mean[i] = np.mean(nwp_val_sorted[index_1:index_2])
+        var_errors_in_range[i] = np.var(errors_sorted[index_1:index_2])
+        mean_errors_in_range[i] = np.mean(errors_sorted[index_1:index_2])
 
 
-    # plt.figure()
-    # plt.scatter(nwp_val, errors)
-    # plt.xlabel('air temperature')
-    # plt.ylabel('prediction error')
-    # plt.figure()
-    # plt.plot(nwp_range_mean, mean_errors_in_range)
-    # plt.plot(nwp_range_mean, np.sqrt(var_errors_in_range))
-    # plt.legend(['mean error', 'standard deviation'])
-    # plt.xlabel('Wind speed')
-    # plt.ylabel('Prediction error')
-    # plt.show()
+    plt.figure()
+    plt.scatter(nwp_val, errors)
+    plt.xlabel('air temperature')
+    plt.ylabel('prediction error')
+    plt.figure()
+    plt.plot(nwp_range_mean, mean_errors_in_range)
+    plt.plot(nwp_range_mean, np.sqrt(var_errors_in_range))
+    plt.legend(['mean error', 'standard deviation'])
+    plt.xlabel('Wind speed')
+    plt.ylabel('Prediction error')
+    plt.show() """
 
     # Plot error over month/hour
-    start_time = datetime.datetime(2020,1,1)
+    """ start_time = datetime.datetime(2020,1,1)
     end_time = datetime.datetime(2022,12,31)
     weather_data = fi.load_weather_data(start_time, end_time)
 
@@ -707,7 +711,7 @@ if __name__ == "__main__":
     plt.ylabel('Prediction error')
     plt.show()
     
-    1 == 1
+    1 == 1 """
     pass
     pass
 

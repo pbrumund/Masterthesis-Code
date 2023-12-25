@@ -6,8 +6,8 @@ import random
 import matplotlib.pyplot as plt
 from multiprocessing import Pool
 
-import utils
-from fileloading import load_weather_data
+from . import utils
+from ..fileloading import load_weather_data
 from gpytorch_models import ExactGP, SparseGP, SKIPGP, HeteroscedasticGP
 
 def get_training_data(weather_data, opt):

@@ -3,6 +3,7 @@ import numpy as np
 import random
 import datetime
 import gpytorch
+import torch
 import gpflow as gpf
 import tensorflow as tf
 import tensorflow_probability as tfp
@@ -14,6 +15,7 @@ from multiprocessing import Pool
 import utils
 from fileloading import load_weather_data
 from posterior_kernel import PosteriorKernel, PosteriorMean
+from posterior_gpytorch import TimeseriesGP
 
 
 class WindPredictionGP:
@@ -316,8 +318,10 @@ class PriorOnTimeseriesGP(WindPredictionGP):
         """Set up a GP to predict wind speeds based on previous measurements, 
         using the GP based on NWP data as a prior"""
         n_last = self.opt['n_last']
-        X_train = np.arange(start=-n_last, stop=0)
-        y_train = np.zeros(n_last)
+        X_train = torch.arange(start=-n_last, end=0).double().reshape((-1,1))
+        y_train = torch.zeros(n_last).double()
+        self.X_train_timeseries = X_train
+        self.y_train_timeseries = y_train
         t_start = prediction_time - n_last*datetime.timedelta(minutes=10)
         times = [t_start + i*datetime.timedelta(minutes=10) for i in range(n_last)]
 
@@ -325,67 +329,95 @@ class PriorOnTimeseriesGP(WindPredictionGP):
             measurement = utils.get_wind_value(self.weather_data, t, 0)
             prediction = utils.get_NWP(self.weather_data, t, 0)
             y_train[i] = measurement - prediction
-        X_train = X_train.reshape((-1,1)).astype(float)
-        y_train = y_train.reshape((-1,1))
         if self.timeseries_gp_param is None:
-            l_init = 20
-            sigma_f_init = 1
-            sigma_n_init = 1e-2
             self.first_train = True
         else:
-            l_init = self.timeseries_gp_param[0]
-            sigma_f_init = self.timeseries_gp_param[1]
-            sigma_n_init = self.timeseries_gp_param[2]
             self.first_train = False
-        
-        kernel = gpf.kernels.Matern12(lengthscales=l_init, variance=sigma_f_init)
-        likelihood = gpf.likelihoods.Gaussian(variance=sigma_n_init)
-        # gpf.set_trainable(kernel.variance, False)
+        likelihood = gpytorch.likelihoods.GaussianLikelihood()
         get_x_fun = lambda x: self._get_in(prediction_time, x)
-        kernel_posterior = PosteriorKernel(
-            kernel, self.gp_prior, get_x_fun, cashing=opt['cashing'])
-        mean_posterior = PosteriorMean(self.gp_prior, get_x_fun, cashing=opt['cashing'])
-        gp_posterior = gpf.models.GPR(
-            (X_train, y_train),
-            kernel=kernel_posterior,
-            mean_function=mean_posterior,
-            likelihood=likelihood
-        )
-        return gp_posterior
+        gp_posterior = TimeseriesGP(
+            X_train, y_train, likelihood, self.gp_prior, get_x_fun, cashing=self.opt['cashing'])
+        # initialize hyperparameters
+        if self.first_train:
+            gp_posterior.covar_module.kernel.base_kernel.lengthscale = 20
+            gp_posterior.covar_module.kernel.outputscale = 1    
+            likelihood.noise = 1e-2
+        else:
+            gp_posterior.covar_module.kernel.base_kernel.lengthscale = self.timeseries_gp_param[0]
+            gp_posterior.covar_module.kernel.outputscale = self.timeseries_gp_param[1]   
+            likelihood.noise = self.timeseries_gp_param[2]
+        self.t_start_timeseries = prediction_time
+        return gp_posterior, likelihood
 
     def train_timeseries_gp(self):
-        train_vars = (self.gp_timeseries.trainable_variables[0], 
-                      self.gp_timeseries.trainable_variables[1], 
-                      self.gp_timeseries.trainable_variables[2])
-        adam_opt = tf.optimizers.Adam(0.5)
-        loss_fn = self.gp_timeseries.training_loss
-        config = gpf.config.Config(jitter=1e-1)
-        with gpf.config.as_context(config):
-            if self.first_train:
-                epochs = self.opt['epochs_timeseries_first_train']
-            else:
-                epochs = self.opt['epochs_timeseries_retrain']
-            for i in range(epochs):       
-                adam_opt.minimize(loss_fn, train_vars)
-                param = self.gp_timeseries.trainable_parameters
-                print((f'Epoch {i+1},' 
-                      f'l: {param[0].numpy()}, '
-                      f'variance scale: {param[1].numpy()}, '
-                      f'noise: {param[2].numpy()}, '
-                      f'loss: {loss_fn().numpy()}'))
-        self.timeseries_gp_param = self.gp_timeseries.trainable_parameters
+        self.gp_timeseries.train()
+        self.timeseries_likelihood.train()
+        # Different learning rates for length and variance scale
+        optimizer_l = torch.optim.Adam(
+            [self.gp_timeseries.covar_module.kernel.base_kernel.raw_lengthscale,
+             self.timeseries_likelihood.raw_noise], lr=0.1
+        )
+        optimizer_sigma = torch.optim.Adam(
+            [self.gp_timeseries.covar_module.kernel.raw_outputscale], lr=0.1
+        )
+        # optimizer = torch.optim.Adam(
+        #     self.gp_timeseries.parameters(), lr=0.1)
+        mll = gpytorch.mlls.ExactMarginalLogLikelihood(
+            self.timeseries_likelihood, self.gp_timeseries)
+        if self.first_train:
+            epochs = self.opt['epochs_timeseries_first_train']
+        else:
+            epochs = self.opt['epochs_timeseries_retrain']
+        for i in range(epochs):
+            # optimizer.zero_grad()
+            optimizer_l.zero_grad()
+            optimizer_sigma.zero_grad()
+            output = self.gp_timeseries(self.X_train_timeseries)
+            loss = -mll(output, self.y_train_timeseries)
+            loss.backward()
+            param_vals = [
+                self.gp_timeseries.covar_module.kernel.base_kernel.lengthscale.item(),
+                self.gp_timeseries.covar_module.kernel.outputscale.item(),
+                self.timeseries_likelihood.noise.item()
+            ]
+            print(f'Epoch {i+1}: '
+                  f'l: {param_vals[0]}, '
+                  f'variance scale: {param_vals[1]}, '
+                  f'noise: {param_vals[2]}, '
+                  f'loss: {loss.item()}')
+            # optimizer.step()
+            optimizer_l.step()
+            optimizer_sigma.step()
+        self.timeseries_gp_param = param_vals
+        
     
     def predict_trajectory(self, start_time, steps, train=False):
-        """Set up the timeseries GP and train if required, then predict a number of steps ahead"""
-        self.gp_timeseries = self.get_timeseries_gp(prediction_time=start_time)
+        """Set up the timeseries GP and train if required, otherwise add new training inputs,
+          then predict a number of steps ahead"""
         if train:
+            self.gp_timeseries, self.timeseries_likelihood = self.get_timeseries_gp(
+                prediction_time=start_time)
             self.train_timeseries_gp()
+            # timeseries_gp = self.gp_timeseries
+        else:
+            x_new = (start_time-self.t_start_timeseries).total_seconds()/(opt['dt_meas']*60) - 1
+            y_new = utils.generate_labels(
+                self.weather_data, start_time-datetime.timedelta(minutes=opt['dt_meas']), 
+                steps_ahead=0)
+            x_new = torch.tensor([x_new]).reshape((-1,1))
+            y_new = torch.tensor([y_new])
+            self.gp_timeseries = self.gp_timeseries.get_fantasy_model(x_new, y_new)
+            
+        self.gp_timeseries.eval()
+        self.timeseries_likelihood.eval()
         x = np.arange(steps).reshape((-1,1)).astype(float)
-        x = tf.convert_to_tensor(x)
-        gp_mean, gp_var = self.gp_timeseries.predict_y(x)
+        x = torch.from_numpy(x)
+        gp_pred_y = self.timeseries_likelihood(self.gp_timeseries(x))
+        gp_mean, gp_var = gp_pred_y.mean, gp_pred_y.variance
+        # gp_mean, gp_var = self.gp_timeseries.predict_y(x)
         NWP_pred = [utils.get_NWP(self.weather_data, start_time, i) for i in range(steps)]
-        gp_pred = np.array(NWP_pred).reshape((-1,1)) + gp_mean
-        return gp_pred.numpy()[:,0], gp_var.numpy()[:,0]
+        gp_pred = np.array(NWP_pred).reshape((-1,1)) + gp_mean.reshape((-1,1)).detach().numpy()
+        return gp_pred[:,0], gp_var.detach().numpy()
     
     def plot_prior(self, start_time, steps):
         times = [start_time+i*datetime.timedelta(minutes=10) for i in range(steps)]
@@ -520,6 +552,8 @@ if __name__ == '__main__':
     steps = 60
     # gp.plot_prior(t_start_predict, steps)
     gp.plot_posterior(t_start_predict, steps, train=True)
+    for i in range(1,10):
+        gp.plot_posterior(t_start_predict + i*datetime.timedelta(minutes=10), steps, train=False)
     # t_start_predict = datetime.datetime(2022,1,1,1)
     # steps = 60
     # gp.plot_prior(t_start_predict, steps)

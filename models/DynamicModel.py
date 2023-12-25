@@ -6,11 +6,11 @@ class DynamicModel():
         self.inputs = u
         self.disturbance = w
         self.parameters = p
+        self._param_values = None
         self.outputs = y
         self.ode = ode
         # self._odefun = None
         # self._outfun = None
-        self._param_values = None
         self._bounds = {}
 
     @property
@@ -114,9 +114,14 @@ class DynamicModel():
             self._outfun = ca.Function('out', [self._x,self._u,self._p], [self._y],
                                         ['x','u','p'], ['y'])
         
-    @property
-    def outfun(self):
-        return self._outfun
+
+    def outfun(self, x=None, u=None, p=None):
+        if x is None:
+            return self._outfun
+        if self.parameter_values is None:
+            return self._outfun(x,u,p)
+        else:
+            return self._outfun(x,u,ca.DM(self.parameter_values))
 
     @property
     def ny(self):
@@ -182,7 +187,7 @@ class DynamicModel():
             ode = {'x': self._x, 
                    'p': self._u, 
                    'ode': self.odefun(self.state, self.inputs, self.parameter_values)}
-        self._integrator = ca.integrator('integrator', 'rk', ode, 0, dt)    # TODO: try collocation
+        self._integrator = ca.integrator('integrator', 'rk', ode, 0, dt)
 
     def get_next_state(self, x_i, u_i):
         result = self._integrator(x0=x_i, p=u_i)

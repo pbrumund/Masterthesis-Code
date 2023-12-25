@@ -41,6 +41,12 @@ def get_GAST_model():
     gtg_GAST.set_parameter('P_gtg_max', 4500)
     return gtg_GAST
 
+def get_static_GTG():
+    P_gtg = ca.SX.sym('P_gtg')
+    x = ca.SX.sym('x', 0)
+    gtg = GasTurbineGenerator(x, P_gtg, {}, P_gtg, x)
+    return gtg
+
 if __name__ == "__main__":
     gtg = get_GAST_model()
     pass

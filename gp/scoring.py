@@ -1,7 +1,7 @@
 import numpy as np
 import datetime
 from scipy.stats import norm
-from wind_prediction_gp import PriorOnTimeseriesGP
+from wind_prediction_gp_gpytorch import PriorOnTimeseriesGP
 import matplotlib.pyplot as plt
 import os.path
 
@@ -106,7 +106,7 @@ def get_posterior_trajectories(opt):
     trajectories_var = np.zeros((n_times, opt['steps_forward']))
 
     for i, time in enumerate(times):
-        if i%opt['freq_retrain'] == 0:
+        if time.minute == 0 and time.hour%6 == 0:
             train = True
             print(f'Training timeseries GP for time {time}')
         else:
@@ -122,26 +122,9 @@ def get_posterior_trajectories(opt):
     return trajectories_mean, trajectories_var
 
 if __name__ == '__main__':
-    # opt = {'t_start': datetime.datetime(2020,1,1),
-    #        't_end': datetime.datetime(2022,12,31,23,50),
-    #        'start_date_train': datetime.datetime(2020,1,1),
-    #        'end_date_train': datetime.datetime(2021,12,31),
-    #        'n_z': 50,
-    #        'epochs_first_training': 100,
-    #        'max_epochs_second_training': 50,
-    #        'epochs_timeseries_first_train': 100,
-    #        'epochs_timeseries_retrain': 10,
-    #        'loss_lb': 0.5,
-    #        'verbose': True,
-    #        'n_last': 432,   # 3 days
-    #        'train_posterior': True,
-    #        'steps_forward': 100,
-    #        't_start_score': datetime.datetime(2022,1,1),
-    #        't_end_score': datetime.datetime(2022,12,31),
-    #        'freq_retrain': 36
-    #        }
     from get_gp_opt import get_gp_opt
-    opt = get_gp_opt(max_epochs_second_training=10)
+    opt = get_gp_opt(n_z=200, max_epochs_second_training=10, epochs_timeseries_retrain=500, 
+                     epochs_timeseries_first_train=500)
     weather_data = load_weather_data(opt['t_start'], opt['t_end'])
 
     try:
@@ -199,9 +182,9 @@ if __name__ == '__main__':
     re_post = np.zeros(steps_forward)
     score_post = np.zeros(steps_forward)
 
-    # trajectories_mean_post, trajectories_var_post = get_posterior_trajectories(opt)
-    trajectories_mean_post = np.loadtxt('gp/scoring/trajectories_mean_post.csv')
-    trajectories_var_post = np.loadtxt('gp/scoring/trajectories_var_post.csv')
+    trajectories_mean_post, trajectories_var_post = get_posterior_trajectories(opt)
+    # trajectories_mean_post = np.loadtxt('gp/scoring/trajectories_mean_post.csv')
+    # trajectories_var_post = np.loadtxt('gp/scoring/trajectories_var_post.csv')
     # first dimension: time of prediction, second dimension: number of steps forward
     # n_points = len(trajectory_measured)
     alpha = 0.1
@@ -213,21 +196,21 @@ if __name__ == '__main__':
         mae_post[i] = get_mae(trajectory_measured[i:n_points+i], trajectory_post)
         re_post[i] = get_RE(alpha, trajectory_measured[i:n_points+i], trajectory_post, var_post)
         score_post[i] = get_interval_score(alpha, trajectory_measured[i:n_points+i], trajectory_post, var_post)
-
+    steps = np.arange(1, steps_forward+1)
     plt.figure()
-    plt.plot(range(steps_forward), rmse_post)
+    plt.plot(steps, rmse_post)
     plt.xlabel('Number of steps predicted forward')
     plt.ylabel('RMSE of prediction')
     plt.figure()
-    plt.plot(range(steps_forward), mae_post)
+    plt.plot(steps, mae_post)
     plt.xlabel('Number of steps predicted forward')
     plt.ylabel('MAE of prediction')
     plt.figure()
-    plt.plot(range(steps_forward), re_post)
+    plt.plot(steps, re_post)
     plt.xlabel('Number of steps predicted forward')
     plt.ylabel('RE of prediction interval for alpha=0.1')
     plt.figure()
-    plt.plot(range(steps_forward), score_post)
+    plt.plot(steps, score_post)
     plt.xlabel('Number of steps predicted forward')
     plt.ylabel('Interval score of prediction interval for alpha=0.1')
 
