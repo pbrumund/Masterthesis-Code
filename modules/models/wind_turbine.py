@@ -38,7 +38,7 @@ class StaticWindTurbine(WindTurbine):
 def get_simple_power_curve_model():
     w = ca.MX.sym('wind_speed')
     y = -0.0089 + 0.0111*w - 0.0076*w**2 + 0.0028*w**3 - 0.0002*w**4 + 0.000005*w**5
-    power_curve = ca.Function('power_curve', [w], [y])
+    power_curve = ca.Function('power_curve', [w], [y], ['wind speed'], ['P_wtg'])
     wind_turbine = StaticWindTurbine(power_curve)
     return wind_turbine
 

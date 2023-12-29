@@ -31,10 +31,11 @@ class NominalMPC(MPC):
         
         v = ca.vertcat(U_mat.reshape((-1,1)), X_mat.reshape((-1,1)), s_P)   # Vector for optimization problem
         
-        self.get_u_from_v_fun = ca.Function('get_u_from_v', [v], [U_mat])
-        self.get_x_from_v_fun = ca.Function('get_x_from_v', [v], [X_mat])
-        self.get_s_from_v_fun = ca.Function('get_s_from_v', [v], [s_P])
-        self.get_v_fun = ca.Function('get_v', [U_mat, X_mat, s_P], [v])
+        self.get_u_from_v_fun = ca.Function('get_u_from_v', [v], [U_mat], ['v'], ['U_mat'])
+        self.get_x_from_v_fun = ca.Function('get_x_from_v', [v], [X_mat], ['v'], ['X_mat'])
+        self.get_s_from_v_fun = ca.Function('get_s_from_v', [v], [s_P], ['v'], ['s_P'])
+        self.get_v_fun = ca.Function('get_v', [U_mat, X_mat, s_P], [v], 
+                                     ['U_mat', 'X_mat', 's_P'], ['v'])
 
         v_lb = self.get_v_fun(U_lb, X_lb, s_P_lb)
         v_ub = self.get_v_fun(U_ub, X_ub, s_P_ub)
@@ -45,14 +46,16 @@ class NominalMPC(MPC):
         get symbolic variables for the parameters of the optimizaton problem:
         initial state, predicted wind speed and power demand
         """
-        x_init = ca.MX.sym('x_init', self.nx)
+        x0 = ca.MX.sym('x0', self.nx)
         wind_speeds = ca.MX.sym('wind_speed', self.horizon)
         P_demand = ca.MX.sym('P_demand', self.horizon)
-        p = ca.vertcat(x_init, wind_speeds, P_demand)
-        self.get_x_init_fun = ca.Function('get_x_init', [p], [x_init])
-        self.get_wind_speed_fun = ca.Function('get_wind_speed', [p], [wind_speeds])
-        self.get_p_demand_fun = ca.Function('get_P_demand', [p], [P_demand])
-        self.get_p_fun = ca.Function('get_p', [x_init, wind_speeds, P_demand], [p])
+        p = ca.vertcat(x0, wind_speeds, P_demand)
+        self.get_x0_fun = ca.Function('get_x0', [p], [x0], ['p'], ['x0'])
+        self.get_wind_speed_fun = ca.Function('get_wind_speed', [p], [wind_speeds], 
+                                              ['p'], ['wind_speeds'])
+        self.get_P_demand_fun = ca.Function('get_P_demand', [p], [P_demand], ['p'], ['P_demand'])
+        self.get_p_fun = ca.Function('get_p', [x0, wind_speeds, P_demand], [p], 
+                                     ['x0', 'wind_speeds', 'P_demand'], ['p'])
         return p
 
     def stage_cost(self, state, input, s_P):
@@ -80,12 +83,12 @@ class NominalMPC(MPC):
         U_mat = self.get_u_from_v_fun(v)
         s_P = self.get_s_from_v_fun(v)
         # get initial state from parameters
-        x_init = self.get_x_init_fun(p)
+        x0 = self.get_x0_fun(p)
 
         J = 0
         for i in range(self.horizon):
             if i == 0:
-                x_i = x_init
+                x_i = x0
             else:
                 x_i = X_mat[i-1,:]
             u_i = U_mat[i,:].T
@@ -103,9 +106,9 @@ class NominalMPC(MPC):
         U_mat = self.get_u_from_v_fun(v)
         s_P = self.get_s_from_v_fun(v)
         # get initial state, wind speed and power demand from parameters
-        x_init = self.get_x_init_fun(p)
+        x0 = self.get_x0_fun(p)
         wind_speeds = self.get_wind_speed_fun(p)
-        P_demand = self.get_p_demand_fun(p)
+        P_demand = self.get_P_demand_fun(p)
         
         g = []
         g_lb = []
@@ -113,7 +116,7 @@ class NominalMPC(MPC):
         for i in range(self.horizon):
             #X_mat[i,:] = x_i+1, U_mat[i,:] = u_i
             if i == 0:
-                x_i = x_init
+                x_i = x0
             else:
                 x_i = X_mat[i-1,:]
             u_i = U_mat[i,:]
@@ -140,7 +143,8 @@ class NominalMPC(MPC):
 
         g = ca.vertcat(*g)
         g_lb = ca.vertcat(*g_lb)
-        g_ub = ca.vertcat(*g_ub)   
+        g_ub = ca.vertcat(*g_ub)
+        self.g_fun = ca.Function('constraints', [v, p], [g], ['v', 'p'], ['g']) 
         return g, g_lb, g_ub
     
 
@@ -158,17 +162,30 @@ class NominalMPC(MPC):
         nlp_opt = self.get_nlp_opt()
         self._solver = ca.nlpsol('mpc_solver', 'ipopt', nlp, nlp_opt)
         v_init = ca.MX.sym('v_init', v.shape)
+
+        self.v = v; self.v_lb = v_lb; self.v_ub  = v_ub
+        self.g = g; self.g_lb = g_lb; self.g_ub = g_ub
         self.solver = ca.Function(
             'mpc', [v_init, p], 
-            [self._solver(x0=v_init, p=p, lbx=v_lb, ubx=v_ub, lbg=g_lb, ubg=g_ub)['x']])
+            [self._solver(x0=v_init, p=p, lbx=v_lb, ubx=v_ub, lbg=g_lb, ubg=g_ub)['x']],
+            ['v_init', 'p'], ['v_opt'])
     
-    def get_initial_guess(self):
-        pass
+    def get_initial_guess(self, p, v_last = None):
+        if v_last is not None:
+            U_last = self.get_u_from_v_fun(v_last)
+            X_last = self.get_x_from_v_fun(v_last)
+            s_P_last = self.get_s_from_v_fun(v_last)
+            # shift states and inputs, repeat last value
+            U_init = ca.vertcat(U_last[1:,:], ca.DM.zeros(1,self.nu))
+            X_init = ca.vertcat(X_last[1:,:], X_last[-1,:])
+            P_demand = self.get_P_demand_fun(p)
+            s_P_init = ca.vertcat(s_P_last[1:,:], P_demand[-1])
+            return self.get_v_fun(U_init, X_init, s_P_init)
+        # No last solution provided, guess zeros for inputs and initial state for X
+        #P_gtg_init = ca.
+        U_init = ca.DM.zeros(self.horizon, self.nu)
+        X_init = ca.DM.ones(self.horizon)@self.ohps.x0.T
+        s_P_init = 1/3*self.get_P_demand_fun(p)
+        s_P_init = ca.DM.zeros(self.horizon)
+        return self.get_v_fun(U_init, X_init, s_P_init)
 
-if __name__ == "__main__":
-    from get_mpc_opt import get_mpc_opt
-    ohps = OHPS()
-    mpc_opt = get_mpc_opt()
-    nominal_mpc = NominalMPC(ohps, mpc_opt)
-    nominal_mpc.get_optimization_problem()
-    pass

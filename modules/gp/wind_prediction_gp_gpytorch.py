@@ -82,8 +82,11 @@ class PriorOnTimeseriesGP(WindPredictionGP):
         return super().get_training_data(opt)  
         
     def get_prior_gp(self, X_train=None, y_train=None):
-        """Get a heteroscedastic SVGP model to predict the prediction error/residuals 
-        and uncertainty based on NWP values"""
+        """
+        Get a heteroscedastic SVGP model to predict the prediction error/residuals 
+        and uncertainty based on NWP values
+        see https://gpflow.github.io/GPflow/develop/notebooks/advanced/heteroskedastic.html
+        """
         self.filename_gp = f'modules/gp/models/gp_prior_{self.opt["n_z"]}'
         try:
             gp_prior = tf.saved_model.load(self.filename_gp)

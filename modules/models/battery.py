@@ -45,7 +45,7 @@ def get_shepherd_model() -> Battery:
     SOC = Q-int_idt
     y = ca.vertcat(P_batt, V_batt, SOC)
 
-    get_SOC_fun = ca.Function('get_SOC', [x, u, Q], [SOC])
+    get_SOC_fun = ca.Function('get_SOC', [x, u, Q], [SOC], ['x', 'u', 'Q'], ['SOC'])
     # ODE
     dxdt = i/N_p/3600
 
@@ -67,7 +67,8 @@ def get_shepherd_model_LiIon(N_p=1, N_s=1):
     battery.set_parameter('N_s', N_s)
     battery.set_bounds(lbx=ca.DM(0.1), ubx=ca.DM(0.8), lbu=ca.DM(-5000), ubu=ca.DM(5000))
     battery.get_SOC_fun = ca.Function('get_SOC', [battery._x, battery._u], 
-        [battery.get_SOC_fun(battery._x, battery._u, battery.parameter_values[2])])
+        [battery.get_SOC_fun(battery._x, battery._u, battery.parameter_values[2])], 
+        ['x', 'u'], ['SOC'])
     battery.x0 = ca.DM(0.5) # initial condition for simulation
     return battery
 

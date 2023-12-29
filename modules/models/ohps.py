@@ -40,12 +40,12 @@ class OHPS(DynamicModel):
         self.x0 = ca.vertcat(self.gtg.x0, self.battery.x0, self.wind_turbine.x0)
 
         # Helper functions to get variables for subsystem
-        self.get_x_gtg = ca.Function('get_x_gtg', [self._x], [self.gtg._x])
-        self.get_x_bat = ca.Function('get_x_bat', [self._x], [self.battery._x])
-        self.get_x_wtg = ca.Function('get_x_wtg', [self._x], [self.wind_turbine._x])
-        self.get_u_gtg = ca.Function('get_u_gtg', [self._u], [self.gtg._u])
-        self.get_u_bat = ca.Function('get_u_bat', [self._u], [self.battery._u])
-        self.get_u_wtg = ca.Function('get_u_wtg', [self._u], [self.wind_turbine._u])
+        self.get_x_gtg = ca.Function('get_x_gtg', [self._x], [self.gtg._x], ['x'], ['x_gtg'])
+        self.get_x_bat = ca.Function('get_x_bat', [self._x], [self.battery._x], ['x'], ['x_bat'])
+        self.get_x_wtg = ca.Function('get_x_wtg', [self._x], [self.wind_turbine._x], ['x'], ['x_wtg'])
+        self.get_u_gtg = ca.Function('get_u_gtg', [self._u], [self.gtg._u], ['u'], ['u_gtg'])
+        self.get_u_bat = ca.Function('get_u_bat', [self._u], [self.battery._u], ['u'], ['u_bat'])
+        self.get_u_wtg = ca.Function('get_u_wtg', [self._u], [self.wind_turbine._u], ['u'], ['u_wtg'])
         
     def get_P_gtg(self, x, u, w):
         x_gtg = self.get_x_gtg(x)
@@ -61,6 +61,11 @@ class OHPS(DynamicModel):
         x_wtg = self.get_x_wtg(x)
         u_wtg = self.get_u_wtg(u)
         return self.wind_turbine.get_power_output(x_wtg, u_wtg, w)
+    
+    def get_SOC_bat(self, x, u, w):
+        x_bat = self.get_x_bat(x)
+        u_bat = self.get_u_bat(u)
+        return self.battery.get_SOC_fun(x_bat, u_bat)
     
     @property
     def parameter_values(self):
