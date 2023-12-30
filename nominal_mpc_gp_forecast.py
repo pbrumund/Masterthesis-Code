@@ -7,6 +7,7 @@ from modules.models import OHPS
 from modules.gp import PriorOnTimeseriesGP as WindPredictionGP
 from modules.gp import DataHandler
 from modules.gp import get_gp_opt
+from modules.plotting import TimeseriesPlot
 
 ohps = OHPS()
 
@@ -14,8 +15,8 @@ mpc_opt = get_mpc_opt()
 nominal_mpc = NominalMPC(ohps, mpc_opt)
 nominal_mpc.get_optimization_problem()
 
-gp_opt = get_gp_opt(dt_pred = mpc_opt['dt'])
-# gp = WindPredictionGP(gp_opt)
+gp_opt = get_gp_opt(dt_pred = mpc_opt['dt'], steps_forward = mpc_opt['N'])
+gp = WindPredictionGP(gp_opt)
 
 t_start = datetime.datetime(2022, 1, 1)
 t_end = datetime.datetime(2022,2,1)
@@ -30,20 +31,27 @@ SOC_traj = ca.DM.zeros(n_times)
 
 data_handler = DataHandler(datetime.datetime(2020,1,1), datetime.datetime(2022,12,31), gp_opt)
 x_k = ohps.x0
+v_last = None
+
+# create plots
+plt_power = TimeseriesPlot('Time', 'Power output', #
+    ['Gas turbine', 'Battery', 'Wind turbine', 'Total power generation', 'Demand'])
+plt_SOC = TimeseriesPlot('Time', 'Battery SOC')
+plt_inputs = TimeseriesPlot('Time', 'Control input', ['Gas turbine power', 'Battery current'])
 
 for k, t in enumerate(times):
     # get parameters: predicted wind speed, power demand, initial state
     wind_speeds = [data_handler.get_measurement(t, i) for i in range(nominal_mpc.horizon)] # perfect forecast
-    P_wtg = [ohps.wind_turbine.power_curve_fun(w) for w in wind_speeds]
+    P_wtg = [ohps.wind_turbine.power_curve_fun(ohps.wind_turbine.scale_wind_speed(w)) for w in wind_speeds]
     wind_speeds = ca.vertcat(*wind_speeds)
+    train = (k==0) or (t.minute==0)
+    wind_speeds_gp = gp.predict_trajectory(t, nominal_mpc.horizon, train)[0] # mean predicted by gp
     P_demand = 1.5*ca.vertcat(*P_wtg)
-    p = nominal_mpc.get_p_fun(x_k, wind_speeds, P_demand)
+    P_demand = 8000*ca.DM.ones(nominal_mpc.horizon)
+    p = nominal_mpc.get_p_fun(x_k, wind_speeds_gp, P_demand)
 
     # get initial guess
-    if k == 0:
-        v_init = nominal_mpc.get_initial_guess(p)
-    else:
-        v_init = nominal_mpc.get_initial_guess(p, v_last)
+    v_init = nominal_mpc.get_initial_guess(p, v_last)
 
     # solve optimization problem
     v_opt = nominal_mpc.solver(v_init, p)
@@ -62,10 +70,14 @@ for k, t in enumerate(times):
     P_traj[k,:] = ca.vertcat(P_gtg, P_bat, P_wtg, P_total, P_demand[0])
     SOC_traj[k] = ohps.get_SOC_bat(x_k, u_k, w_k)
 
+    plt_inputs.plot(times[:k], u_traj[:k,:])
+    plt_power.plot(times[:k], P_traj[:k,:])
+    plt_SOC.plot(times[:k], SOC_traj[:k])
+
     # Print out current SOC and power outputs
     print(f'time: {t.strftime("%d.%m.%Y %H:%M")}: Battery SOC: {SOC_traj[k]}')
     print(f'Gas turbine power output: {P_gtg}, Battery power output: {P_bat}, '
-          f'Wind turbine power output: {P_gtg}, Total power: {P_total}, Demand: {P_demand[0]}')
+          f'Wind turbine power output: {P_wtg}, Total power: {P_total}, Demand: {P_demand[0]}')
     # simulate system
     x_k = ohps.get_next_state(x_k, u_k)
 

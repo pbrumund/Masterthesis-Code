@@ -30,7 +30,8 @@ class StaticWindTurbine(WindTurbine):
         self.inverse_power_curve = inverse_power_curve_fun      
         self.hub_height = hub_height    # for scaling wind speed
     def get_power_output(self, x, u, w):
-        return self.power_curve_fun(w)
+        wind_speed_scaled = self.scale_wind_speed(w)
+        return self.power_curve_fun(wind_speed_scaled)
     
 
     

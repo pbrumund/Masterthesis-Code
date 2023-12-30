@@ -8,8 +8,8 @@ def get_gp_opt(**kwargs):
            'n_z': 200,
            'epochs_first_training': 100,
            'max_epochs_second_training': 50,
-           'epochs_timeseries_first_train': 100,
-           'epochs_timeseries_retrain': 10,
+           'epochs_timeseries_first_train': 500,
+           'epochs_timeseries_retrain': 500,
            'loss_lb': 0.5,
            'verbose': True,
            'n_last': 144,   # 1 day

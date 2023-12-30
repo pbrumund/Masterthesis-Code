@@ -377,11 +377,14 @@ class PriorOnTimeseriesGP(WindPredictionGP):
             self.gp_timeseries.covar_module.kernel.gamma = 0.5
     
     def predict_trajectory(self, start_time, steps, train=False):
+        """
+        Set up the timeseries GP and train if required, then predict a number of steps ahead
+        returns mean and variance as numpy arrays
+        """
         dt = 0  # if start time is not multiple of 10 min, difference to last previous multiple to shift indices
         if start_time.minute%self.opt['dt_meas'] != 0:
             dt = start_time.minute%self.opt['dt_meas']
             start_time = start_time.replace(minute=start_time.minute//self.opt['dt_meas']*self.opt['dt_meas'])
-        """Set up the timeseries GP and train if required, then predict a number of steps ahead"""
         if train:
             self.gp_predictions = None
             self.t_last_train = start_time

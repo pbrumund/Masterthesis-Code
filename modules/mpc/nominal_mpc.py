@@ -1,4 +1,5 @@
 import casadi as ca
+
 from .mpc_class import MPC
 from ..models import OHPS
 

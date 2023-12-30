@@ -1,6 +1,6 @@
-import numpy as np
 import datetime
 import csv
+import numpy as np
 
 def load_forecast(start_time, end_time, filename=None):
     """Loads numerical weather predictions from a csv file

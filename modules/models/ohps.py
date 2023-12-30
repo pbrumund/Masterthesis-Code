@@ -35,7 +35,7 @@ class OHPS(DynamicModel):
         ubx = ca.vertcat(self.gtg.ubx, self.battery.ubx, self.wind_turbine.ubx)
         lbu = ca.vertcat(self.gtg.lbu, self.battery.lbu, self.wind_turbine.lbu)
         ubu = ca.vertcat(self.gtg.ubu, self.battery.ubu, self.wind_turbine.ubu)
-        self.set_bounds(lbx=lbx, ubs=ubx, lbu=lbu, ubu=ubu)
+        self.set_bounds(lbx=lbx, ubx=ubx, lbu=lbu, ubu=ubu)
 
         self.x0 = ca.vertcat(self.gtg.x0, self.battery.x0, self.wind_turbine.x0)
 
