@@ -46,7 +46,7 @@ class PosteriorKernel(gpf.kernels.Kernel):
         self.gp_predictions = {}
 
     def K(self, X, X2=None):
-        # TODO: show positive definiteness to prove this is a valid kernel fuction
+        # TODO: show positive definiteness to prove this is a valid kernel fuction, done
         if X2 is None:
             k = self.kernel.K(X)
             if self.cashing:

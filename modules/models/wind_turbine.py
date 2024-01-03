@@ -48,10 +48,13 @@ def get_power_curve_model():
     wind_speeds = power_curve_data[:,0]
     power_outputs = power_curve_data[:,1]
     power_curve = ca.interpolant('power_curve', 'bspline', [wind_speeds], power_outputs)
-    # Inverse power curve: interpolation with inputs/outputs reversed to avoid solving equation
+    wind_speed_max = np.max(wind_speeds)
     P_min = np.min(power_outputs)
     P_max = np.max(power_outputs)
-    P_max = P_max
+    w = ca.MX.sym('wind_speed')
+    # extrapolate last value for wind speeds higher than biggest value in table
+    # power_curve = ca.if_else(w<wind_speed_max, power_curve(w), P_max)
+    # Inverse power curve: interpolation with inputs/outputs reversed to avoid solving equation 
     for i, p in enumerate(power_outputs):
         if p==P_min and power_outputs[i+1] > P_min:
             i_start = i

@@ -94,7 +94,8 @@ class NominalMPC(MPC):
                 x_i = X_mat[i-1,:]
             u_i = U_mat[i,:].T
             s_P_i = s_P[i,:]
-            J += self.stage_cost(x_i, u_i, s_P_i)
+            J += self.stage_cost(x_i, u_i, s_P_i) 
+            # TODO: maybe integrate cost function over interval instead of adding terms at discretization points
         # If needed, add terminal cost term here
         return J
     def get_constraints(self, v, p):
@@ -123,7 +124,8 @@ class NominalMPC(MPC):
             u_i = U_mat[i,:]
             x_next = self.ohps.get_next_state(x_i, u_i)
             # System dynamics
-            # x_k+1 - f(x_k, u_k) = 0
+            # x_k+1 - f(x_k, u_k) = 0^
+            # TODO: possibly test implicit RK method for discretisation of dynamic model
             g_state = X_mat[i,:] - x_next
             g_state_lb = 0
             g_state_ub = 0

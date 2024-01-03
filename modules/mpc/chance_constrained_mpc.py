@@ -70,6 +70,7 @@ class ChanceConstrainedMPC(NominalMPC):
             g_lb.append(g_state_lb)
             g_ub.append(g_state_ub)
             # Power constraint
+            # TODO: what happens if wind speed is possibly above cut-out speed? Include upper inverval border as well
             # P_demand - (P_gtg + P_bat + P_wtg + s_P) <= 0
             P_gtg = self.ohps.get_P_gtg(x_i, u_i, wind_speeds[i])
             P_bat = self.ohps.get_P_bat(x_i, u_i, wind_speeds[i])

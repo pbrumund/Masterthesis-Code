@@ -7,217 +7,295 @@ import random
 import matplotlib.pyplot as plt
 from multiprocessing import Pool
 
-import utils
-from fileloading import load_weather_data
+# import utils
+# from fileloading import load_weather_data
+from .data_handling import DataHandler
+from .wind_prediction_gp_gpytorch import WindPredictionGP
 
+class DirectGP(WindPredictionGP):
+    def __init__(self, steps_ahead, opt):
+        self.opt = opt
+        self.steps_ahead = steps_ahead
+        self.order = opt['direct_model_order']
+        self.gp = self.load_gp_model()
+        if self.gp is None:
+            super().__init__(opt) # load data handler
+            self.X_train, self.y_train = self.get_training_data()
+            self.gp, is_trained = self.get_gp_model(self.X_train, self.y_train)
+            if not is_trained:
+                self.train_gp(self.X_train, self.y_train)
 
-def get_training_data(weather_data, opt):
-    order = opt['order']
-    # n_samples = opt['n_samples']
-    input_feature = opt['input_feature']
-    label = opt['label']
-    steps_ahead = opt['steps_ahead']
-    filename_X = f'gp\\training_data\X_train_{order}_last_{input_feature}_{label}_{steps_ahead}step.txt'
-    filename_y = f'gp\\training_data\y_train_{order}_last_{input_feature}_{label}_{steps_ahead}step.txt'
-    try:
-        # If training data has been generated before, load it from file
-        X_train = np.loadtxt(filename_X)
-        y_train = np.loadtxt(filename_y).reshape((-1,1))
-        print('loaded data from file')
-    except:
-        # generate training data
-        print('generating data')
-        end_datetime = opt['end_date_train']
-        start_datetime = weather_data['times_meas'][order]
-        n_points = int((end_datetime-start_datetime)/datetime.timedelta(minutes=10))
-        times = [start_datetime + i*datetime.timedelta(minutes=10) for i in range(n_points)]
-        n_x = utils.generate_features(
-            weather_data, start_datetime, order, input_feature, steps_ahead).shape[0]
+    def get_training_data(self):
+        opt = {}
+        opt['filename_x'] = f'modules/gp/training_data/X_train_direct_{self.steps_ahead}_steps.txt'
+        opt['filename_y'] = f'modules/gp/training_data/y_train_direct_{self.steps_ahead}_steps.txt'
+        opt['input_feature'] = 'error & nwp'
+        opt['label'] = 'error'
+        opt['steps_ahead'] = self.steps_ahead
+        opt['n_last'] = self.order
+        return super().get_training_data(opt) 
+
+    def load_gp_model(self):
+        self.filename_gp = f'modules/gp/models/gp_direct_{self.steps_ahead}'
+        try:
+            gp = tf.saved_model.load(self.filename_gp)
+            if self.opt['verbose']:
+                print('loaded gp from file')
+            return gp
+        except:
+            return None
+    def get_gp_model(self, X_train=None, y_train=None):
+        """
+        Get a heteroscedastic SVGP model to predict the prediction error/residuals 
+        and uncertainty based on NWP values
+        see https://gpflow.github.io/GPflow/develop/notebooks/advanced/heteroskedastic.html
+        """
+        self.filename_gp = f'modules/gp/models/gp_direct_{self.steps_ahead}'
+        try:
+            gp = tf.saved_model.load(self.filename_gp)
+            print('loaded gp from file')
+            return gp, True
+        except:
+            if X_train is None:
+                raise RuntimeError('tried to fit gp without providing training data')#
+        if self.opt['verbose']:
+            print(f'training gp for {self.steps_ahead} step prediction')
+
+        n_inputs = X_train.shape[1]
+        n_samples = X_train.shape[0]
+        n_nwp_inputs = n_inputs - self.order
+        n_measurement_inputs = self.order
+
+        likelihood = gpf.likelihoods.HeteroskedasticTFPConditional(
+            scale_transform=tfp.bijectors.Exp())
         
-        if opt['multithread']:
-            args_X = [(weather_data, time, order, input_feature, steps_ahead) for time in times]
-            args_y = [(weather_data, time, label, steps_ahead) for time in times]
-            with Pool(processes=12) as pool:
-                X_train = pool.starmap(utils.generate_features, args_X, chunksize=1000)
-                print('finished generating X_train')
-                y_train = pool.starmap(utils.generate_labels, args_y, chunksize=1000)
-                print('finished generating y_train')
-                X_train = np.array(X_train).reshape((n_points, n_x))
-                y_train = np.array(y_train).reshape((n_points, 1))
+        # Kernel for last measurements
+        kernel_measurements_mean = gpf.kernels.Sum(
+            [gpf.kernels.SquaredExponential(lengthscales=[1], active_dims=[i]) 
+             for i in range(0, n_measurement_inputs)]
+        )
 
+        kernel_measurements_var = gpf.kernels.Sum(
+            [gpf.kernels.SquaredExponential(lengthscales=[.3], active_dims=[i]) 
+             for i in range(0, n_measurement_inputs)]
+        )
+        
+        kernel_nwp_mean = gpf.kernels.Sum(
+            [gpf.kernels.SquaredExponential(lengthscales=[1], active_dims=[i]) 
+             for i in range(n_measurement_inputs, n_inputs-1)]
+        )
+        kernel_nwp_var = gpf.kernels.Sum(
+            [gpf.kernels.SquaredExponential(lengthscales=[.3], active_dims=[i]) 
+             for i in range(n_measurement_inputs, n_inputs-1)]
+        )
+
+
+        kernel_mean = (
+            kernel_measurements_mean
+            + (kernel_nwp_mean
+            # + gpf.kernels.Periodic(
+            #     gpf.kernels.SquaredExponential(active_dims=[n_inputs-1]), period=365) 
+            # + gpf.kernels.Periodic(
+            #     gpf.kernels.SquaredExponential(active_dims=[n_inputs-1]), period=1))
+            ))
+        # gpf.set_trainable(kernel_mean.submodules[9].period, False)
+        # gpf.set_trainable(kernel_mean.submodules[10].period, False)
+        kernel_var = (
+            kernel_measurements_var
+            + (kernel_nwp_var
+            # + gpf.kernels.Periodic(
+            #     gpf.kernels.SquaredExponential(active_dims=[n_inputs-1]), period=365) 
+            # + gpf.kernels.Periodic(
+            #     gpf.kernels.SquaredExponential(active_dims=[n_inputs-1]), period=1)
+            ))
+        # gpf.set_trainable(kernel_var.submodules[9].period, False)
+        # gpf.set_trainable(kernel_var.submodules[10].period, False)
+        kernel = gpf.kernels.SeparateIndependent(
+            [
+                kernel_mean,
+                kernel_var
+            ]
+        )
+        
+        mean = gpf.functions.Constant(np.zeros(2))
+        
+        n_z = self.opt['n_z']
+        i_Z1 = random.sample(range(n_samples), n_z)
+        i_Z2 = random.sample(range(n_samples), n_z)
+        Z1 = X_train[i_Z1, :]
+        Z2 = X_train[i_Z2, :]
+
+        inducing_variable = gpf.inducing_variables.SeparateIndependentInducingVariables(
+            [
+                gpf.inducing_variables.InducingPoints(Z1),  
+                gpf.inducing_variables.InducingPoints(Z2), 
+            ]
+        )
+
+        gp_direct = gpf.models.SVGP(
+            kernel=kernel, 
+            likelihood=likelihood, 
+            inducing_variable=inducing_variable,
+            num_latent_gps=likelihood.latent_dim,
+            mean_function=mean,
+            )
+        return gp_direct, False
+    
+    def get_training_step(self, X_train, y_train):
+        loss_fn = self.gp.training_loss_closure(
+            (X_train, y_train))
+        variational_vars = [(self.gp.q_mu, self.gp.q_sqrt)]
+        natgrad_opt = gpf.optimizers.NaturalGradient(gamma=0.1)
+
+        adam_vars = self.gp.trainable_variables
+        adam_opt = tf.optimizers.Adam(0.1)
+
+        config = gpf.config.Config(jitter=1e-2)
+        with gpf.config.as_context(config):
+            @tf.function
+            def training_step():
+                natgrad_opt.minimize(loss_fn, variational_vars)
+                adam_opt.minimize(loss_fn, adam_vars)
+
+        return training_step, loss_fn
+
+    def train_gp(self, X_train, y_train):
+        """Train the GP"""
+        # Train on subset of data to speed up training and avoid numerical instability
+        reselect_data = self.opt['reselect_data']
+        n_inputs = X_train.shape[1]
+        n_samples = X_train.shape[0]
+        if reselect_data:
+            n_train_1 = int(X_train.shape[0]/100)
         else:
-            X_train = np.zeros((n_points, n_x))
-            y_train = np.zeros((n_points, 1))
-            for i, time in enumerate(times):
-                x = utils.generate_features(weather_data, time, order, input_feature, steps_ahead)
-                y = utils.generate_labels(weather_data, time, label, steps_ahead)
-                X_train[i,:] = x
-                y_train[i,:] = y
-                if (i+1)%int(n_points/20)==0:
-                    print(f'{int((i+1)/int(n_points/20)*5)}% done')
-        # Save to file
-        np.savetxt(filename_X, X_train)
-        np.savetxt(filename_y, y_train)
-    return X_train, y_train
+            n_train_1 = int(X_train.shape[0]/10)
+            training_subset = random.sample(range(n_samples), n_train_1)
+            loss_fn = self.gp.training_loss_closure(
+                (X_train[training_subset,:], y_train[training_subset,:]))
 
+        gpf.utilities.set_trainable(self.gp.q_mu, False)
+        gpf.utilities.set_trainable(self.gp.q_sqrt, False)
 
-
-
-def get_gp(weather_data, opt):
-    order = opt['order']
-    input_feature = opt['input_feature']
-    label = opt['label']
-    steps_ahead = opt['steps_ahead']
-
-    filename_gp = f'gp\gp_direct_{order}_last_{input_feature.replace(" ", "_")}_{label}_{steps_ahead}step'
-    try:
-        gp = tf.saved_model.load(filename_gp)
-        print('loaded gp from file')
-        return gp
-    except:
-        pass
-    print(f'training gp for {steps_ahead} steps ahead')
-    X_train, y_train = get_training_data(weather_data, opt)
-    n_inputs = X_train.shape[1]
-    n_samples = X_train.shape[0]
-
-    likelihood = gpf.likelihoods.HeteroskedasticTFPConditional(scale_transform=tfp.bijectors.Exp())
-
-    kernel_mean = gpf.kernels.SquaredExponential(lengthscales=[.1]*n_inputs) + gpf.kernels.Linear()
-    kernel_var = gpf.kernels.SquaredExponential(lengthscales=[.1]*n_inputs) + gpf.kernels.Linear()
-    kernel = gpf.kernels.SeparateIndependent(
-        [
-            kernel_mean,
-            kernel_var
-        ]
-    )
-    
-    n_z = opt['n_z']
-    i_Z1 = random.sample(range(n_samples), n_z)
-    i_Z2 = random.sample(range(n_samples), n_z)
-    Z1 = X_train[i_Z1, :]
-    Z2 = X_train[i_Z2, :]
-
-    inducing_variable = gpf.inducing_variables.SeparateIndependentInducingVariables(
-        [
-            gpf.inducing_variables.InducingPoints(Z1),  # This is U1 = f1(Z1)
-            gpf.inducing_variables.InducingPoints(Z2),  # This is U2 = f2(Z2)
-        ]
-    )
-
-    gp = gpf.models.SVGP(
-        kernel=kernel, 
-        likelihood=likelihood, 
-        inducing_variable=inducing_variable,
-        num_latent_gps=likelihood.latent_dim)
-    # Train on subset of data
-    n_train_1 = int(X_train.shape[0]/10)
-    training_subset = random.sample(range(n_samples), n_train_1)
-    loss_fn = gp.training_loss_closure((X_train[training_subset,:], y_train[training_subset,:]))
-
-    gpf.utilities.set_trainable(gp.q_mu, False)
-    gpf.utilities.set_trainable(gp.q_sqrt, False)
-
-    variational_vars = [(gp.q_mu, gp.q_sqrt)]
-    natgrad_opt = gpf.optimizers.NaturalGradient(gamma=0.1)
-
-    adam_vars = gp.trainable_variables
-    adam_opt = tf.optimizers.Adam(0.1)
-    
-    config = gpf.config.Config(jitter=1e-3)
-    with gpf.config.as_context(config):
-        @tf.function
-        def training_step():
-            natgrad_opt.minimize(loss_fn, variational_vars)
-            adam_opt.minimize(loss_fn, adam_vars)
+        config = gpf.config.Config(jitter=1e-2)
+        with gpf.config.as_context(config):
+            if reselect_data:
+                training_subset = random.sample(range(n_samples), n_train_1)
+                training_step, loss_fn = self.get_training_step(
+                    X_train[training_subset,:], y_train[training_subset,:])
+            else:
+                @tf.function
+                def training_step():
+                    natgrad_opt.minimize(loss_fn, variational_vars)
+                    adam_opt.minimize(loss_fn, adam_vars)
+            
+            max_epochs = self.opt['epochs_first_training']
+            loss_lb = self.opt['loss_lb']
+            
+            for i in range(max_epochs+1):
+                try:
+                    training_step()
+                except:
+                    raise RuntimeError('Failed to train model')
+                if loss_fn().numpy() < loss_lb:
+                    break
+                if self.opt['verbose']:#and i%20==0:
+                    print(f"Epoch {i} - Loss: {loss_fn().numpy() : .4f}")
+                if (i+1)%10==0 and reselect_data:
+                    training_subset = random.sample(range(n_samples), n_train_1)
+                    training_step, loss_fn = self.get_training_step(
+                        X_train[training_subset,:], y_train[training_subset,:])
+                
         
-        max_epochs = opt['epochs_first_training']
-        loss_lb = opt['loss_lb']
-        for i in range(max_epochs+1):
-            try:
-                training_step()
-            except:
-                print('Likelihood is nan')
-                raise RuntimeError('Failed to train model')
-            if loss_fn().numpy() < loss_lb:
-                break
-            if True:#opt['verbose'] and i%20==0:
-                print(f"Epoch {i} - Loss: {loss_fn().numpy() : .4f}")
-    
-    # Second training on full data set
-    loss_fn = gp.training_loss_closure((X_train, y_train))
-    natgrad_opt = gpf.optimizers.NaturalGradient(gamma=0.1)
-    adam_opt = tf.optimizers.Adam(0.1)
+        # Second training on full data set
+        variational_vars = [(self.gp.q_mu, self.gp.q_sqrt)]
+        natgrad_opt = gpf.optimizers.NaturalGradient(gamma=0.5)
 
-    with gpf.config.as_context(config):
-        @tf.function
-        def training_step():
-            natgrad_opt.minimize(loss_fn, variational_vars)
-            adam_opt.minimize(loss_fn, adam_vars)
+        adam_vars = self.gp.trainable_variables
+        adam_opt = tf.optimizers.Adam(0.1)
+        loss_fn = self.gp.training_loss_closure((X_train, y_train))
         
-        max_epochs = opt['max_epochs_second_training']
-        loss_lb = opt['loss_lb']
-        for i in range(max_epochs+1):
-            try:
-                training_step()
-            except:
-                print('Likelihood is nan')
-                raise RuntimeError('Failed to train model')
-            if loss_fn().numpy() < loss_lb:
-                break
-            if True:#opt['verbose'] and i%20==0:
-                print(f"Epoch {i} - Loss: {loss_fn().numpy() : .4f}")
 
-    # save gp
-    gp.compiled_predict_f = tf.function(
-        lambda x: gp.predict_f(x),
-        input_signature=[tf.TensorSpec(shape=[None, n_inputs], dtype=tf.float64)]
-    )
-    gp.compiled_predict_y = tf.function(
-        lambda x: gp.predict_y(x),
-        input_signature=[tf.TensorSpec(shape=[None, n_inputs], dtype=tf.float64)]
-    )
-    tf.saved_model.save(gp, filename_gp)
-    return gp
+        config = gpf.config.Config(jitter=1e-2)
+        with gpf.config.as_context(config):
+            @tf.function
+            def training_step():
+                natgrad_opt.minimize(loss_fn, variational_vars)
+                adam_opt.minimize(loss_fn, adam_vars)
+            
+            max_epochs = self.opt['max_epochs_second_training']
+            loss_lb = self.opt['loss_lb']
+            for i in range(max_epochs+1):
+                try:
+                    training_step()
+                except:
+                    print('Likelihood is nan')
+                    raise RuntimeError('Failed to train model')
+                if loss_fn().numpy() < loss_lb:
+                    break
+                if self.opt['verbose']:# and i%20==0:
+                    print(f"Epoch {i} - Loss: {loss_fn().numpy() : .4f}")
 
-if __name__ == "__main__":
-    start_time = datetime.datetime(2020,1,1)
-    end_time = datetime.datetime(2022,12,31)
-    end_time_train = datetime.datetime(2021,12,31)
+        # save gp
+        self.gp.compiled_predict_f = tf.function(
+            lambda x: self.gp.predict_f(x),
+            input_signature=[tf.TensorSpec(shape=[None, n_inputs], dtype=tf.float64)]
+        )
+        self.gp.compiled_predict_y = tf.function(
+            lambda x: self.gp.predict_y(x),
+            input_signature=[tf.TensorSpec(shape=[None, n_inputs], dtype=tf.float64)]
+        )
 
-    n_last = 5
-    input_feature = 'error & nwp'
-    label = 'error'
-    print(input_feature)
-    print(label)
-    print(f'n_last = {n_last}')
+        tf.saved_model.save(self.gp, self.filename_gp)
 
-    opt = {'end_date_train': end_time_train,
-           'order': n_last,
-           'input_feature': input_feature,
-           'label': label,
-           'n_z': 4000,
-           'epochs_first_training': 100,
-           'max_epochs_second_training': 100,
-           'loss_lb': 10,
-           'verbose': True,
-           'steps_ahead': 1,
-           'multithread': True}
+class DirectGPEnsemble(WindPredictionGP):
+    def __init__(self, opt):
+        super().__init__(opt)
+        self.get_models()
+        self.model_lut = {}
+
+    def get_models(self):
+        self.models = {}
+        self.steps_list = (1,2,3,4,5,6,7,8,10,15,20,25,30,40,60)
+        for step in self.steps_list:
+            direct_gp = DirectGP(step, self.opt)
+            self.models[step] = direct_gp
     
-    weather_data = load_weather_data(start_time, end_time)
-    for steps in range(1,60):
-        print(f'getting model for {steps} steps ahead')
-        opt_i = opt.copy()
-        opt_i['steps_ahead'] = steps
-        # X_train, y_train = get_training_data(weather_data, opt)
-        success = False
-        while not success:
-            try:
-                gp = get_gp(weather_data, opt_i)
-                success = True
-            except RuntimeError:
-                # Failed training, use half the number of inducing variables
-                print('failed to train model, reducing number of inducing variables')
-                opt_i['n_z'] = int(opt_i['n_z']/2)
-                print(f'Number of inducing variables: {opt_i["n_z"]}')
-    pass
+    def find_model(self, steps_scaled):
+        model_steps = self.model_lut.get(steps_scaled)
+        if model_steps is not None: return model_steps
+        if steps_scaled >= self.steps_list[-1]: return self.steps_list[-1]
+        model_steps = steps_scaled
+        while not model_steps in self.steps_list:
+            model_steps += self.opt['dt_pred']/self.opt['dt_meas']
+        self.model_lut[steps_scaled] = int(model_steps)
+        return int(model_steps)
+    
+    def predict_trajectory(self, start_time, steps):
+        # dt = 0  # if start time is not multiple of 10 min, difference to last previous multiple to shift indices
+        # if start_time.minute%self.opt['dt_meas'] != 0:
+        #     dt = start_time.minute%self.opt['dt_meas']
+        #     start_time = start_time.replace(
+        #         minute=start_time.minute//self.opt['dt_meas']*self.opt['dt_meas'])
+        scale = self.opt['dt_pred']/self.opt['dt_meas']
+        mean_traj = np.zeros(steps)
+        var_traj = np.zeros(steps)
+        for step in range(1, steps+1):
+            step_scaled = step*scale
+            model_index = self.find_model(step_scaled)
+            model = self.models[model_index]
+            timesteps_shift = model_index - step_scaled
+            t_inputs = start_time - timesteps_shift*datetime.timedelta(minutes=self.opt['dt_meas'])
+            gp_in = self.data_handler.generate_features(time=t_inputs,
+                                                        n_last=model.order,
+                                                        feature='error & nwp',
+                                                        steps_ahead=model_index
+                                                        ).reshape((1,-1))
+            mean, var = model.gp.compiled_predict_y(gp_in)
+            mean = mean + self.data_handler.get_NWP(start_time, step_scaled)
+            mean_traj[step-1] = mean
+            var_traj[step-1] = var
+        return mean_traj, var_traj
+
+
+
+

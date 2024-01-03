@@ -100,20 +100,20 @@ class DataHandler():
             return errors
         elif feature == 'measurement':
             return measurements
-        elif feature == 'measurement & error':
-            return np.concatenate([measurements, errors])
-        elif feature == 'prediction & error':
-            return np.concatenate([wind_predictions, errors])
-        elif feature == 'prediction & measurement':
-            return np.concatenate([measurements, wind_prediction_at_step])
         elif feature == 'error & nwp':
-            return np.concatenate([errors, [measurements[-1]], NWP_values])
+            return np.concatenate([errors, NWP_values])
         elif feature == 'error & nwp & time':
-            return np.concatenate([errors, [measurements[-1]], NWP_values])
+            # add time in days
+            dt = time+steps_ahead*datetime.timedelta(minutes=self.dt_meas)-self.weather_data['times_meas'][0]
+            t_out = dt.total_seconds()/(60*60*24)
+            return np.concatenate([errors, np.append(NWP_values, t_out)])
         elif feature == 'measurement & nwp':
             return np.concatenate([measurements, NWP_values])
         elif feature == 'measurement & nwp & time':
-            return np.concatenate([measurements, NWP_values])
+            # add time in days
+            dt = time+steps_ahead*datetime.timedelta(minutes=self.dt_meas)-self.weather_data['times_meas'][0]
+            t_out = dt.total_seconds()/(60*60*24)
+            return np.concatenate([measurements, np.append(NWP_values, t_out)])
         else:
             raise ValueError('Unknown value for input feature')
         

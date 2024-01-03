@@ -14,8 +14,8 @@ class TimeseriesGP(gpytorch.models.ExactGP):
         super().__init__(train_inputs, train_targets, likelihood)
         # self.mean_module = gpytorch.means.ZeroMean()
         self.mean_module = NWPMean(nwp_gp, get_x_fun, cashing, gp_predictions)
-        # self.inner_kernel = gpytorch.kernels.MaternKernel(nu=0.5)
-        self.inner_kernel = GammaExponentialKernel(gamma=0.5)
+        self.inner_kernel = gpytorch.kernels.MaternKernel(nu=0.5)
+        # self.inner_kernel = GammaExponentialKernel(gamma=0.5)
         # self.inner_kernel = gpytorch.kernels.ScaleKernel(
         #     gpytorch.kernels.MaternKernel(nu=0.5)
         # )

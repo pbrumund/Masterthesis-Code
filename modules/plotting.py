@@ -14,8 +14,6 @@ class TimeseriesPlot:
     def setup_plot(self):
         self.fig = plt.figure()
         self.ax = plt.axes()
-        self.ax.set_xlabel(self.xlabel)
-        self.ax.set_ylabel(self.ylabel)
         self.is_setup = True
 
     def plot(self, x, y):
@@ -41,6 +39,8 @@ class TimeseriesPlot:
             else: label = None
             plot = self.ax.plot(x, y_i, label=label)
             plots.append(plot)
+        self.ax.set_xlabel(self.xlabel)
+        self.ax.set_ylabel(self.ylabel)
         if self.timeseries_names is not None:
             self.ax.legend()
         plt.pause(0.01)

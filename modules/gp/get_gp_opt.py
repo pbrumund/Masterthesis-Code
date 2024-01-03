@@ -8,8 +8,8 @@ def get_gp_opt(**kwargs):
            'n_z': 200,
            'epochs_first_training': 100,
            'max_epochs_second_training': 50,
-           'epochs_timeseries_first_train': 500,
-           'epochs_timeseries_retrain': 500,
+           'epochs_timeseries_first_train': 200,
+           'epochs_timeseries_retrain': 200,
            'loss_lb': 0.5,
            'verbose': True,
            'n_last': 144,   # 1 day
@@ -21,7 +21,8 @@ def get_gp_opt(**kwargs):
            'reselect_data': True,
            'cashing': True,
            'dt_meas': 10,
-           'dt_pred': 10
+           'dt_pred': 10,
+           'direct_model_order': 3,
            }
     opt.update(kwargs)
     return opt
