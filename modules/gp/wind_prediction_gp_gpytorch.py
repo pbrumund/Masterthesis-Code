@@ -66,7 +66,7 @@ class WindPredictionGP:
             np.savetxt(filename_y, y_train)
         return X_train, y_train
 
-class PriorOnTimeseriesGP(WindPredictionGP):
+class TimeseriesModel(WindPredictionGP):
     """Generate training data for the prior GP using NWP as inputs"""
     def __init__(self, opt):
         super().__init__(opt)
@@ -387,45 +387,57 @@ class PriorOnTimeseriesGP(WindPredictionGP):
             self.timeseries_likelihood.noise = 1e-2
             self.gp_timeseries.covar_module.kernel.gamma = 0.5
     
-    def predict_trajectory(self, start_time, steps, train=False, pseudo_gp = None):
+    def predict_trajectory(self, start_time, steps, train=False, pseudo_gp = None, 
+                           include_last_measurement=True):
         """
         Set up the timeseries GP and train if required, then predict a number of steps ahead
         returns mean and variance as numpy arrays
         """
+        if include_last_measurement:
+            # include last measurement in prediction for exact first value by shifting time and indices
+            start_time_gp = start_time-datetime.timedelta(minutes=self.opt['dt_meas'])
+        else:
+            start_time_gp = start_time
         dt = 0  # if start time is not multiple of 10 min, difference to last previous multiple to shift indices#
-        if start_time.minute%self.opt['dt_meas'] != 0:
-            dt = start_time.minute%self.opt['dt_meas']
-            start_time = start_time.replace(
-                minute=start_time.minute//self.opt['dt_meas']*self.opt['dt_meas'])
+        if start_time_gp.minute%self.opt['dt_meas'] != 0:
+            dt = start_time_gp.minute%self.opt['dt_meas']
+            start_time_gp = start_time_gp.replace(
+                minute=start_time_gp.minute//self.opt['dt_meas']*self.opt['dt_meas'])
         if pseudo_gp is None:
             if train:
                 self.gp_predictions = None
-                self.t_last_train = start_time
+                self.t_last_train = start_time_gp
                 self.gp_timeseries, self.timeseries_likelihood = self.get_timeseries_gp(
-                    prediction_time=start_time)
+                    prediction_time=start_time_gp)
                 self.reset_timeseries_gp_hyperparameters()
                 self.train_timeseries_gp()
             else:
                 self.gp_timeseries, self.timeseries_likelihood = self.get_timeseries_gp(
-                prediction_time=start_time)
+                prediction_time=start_time_gp)
             gp_timeseries = self.gp_timeseries
         else:
             gp_timeseries = pseudo_gp
         self.gp_timeseries.eval()
         self.timeseries_likelihood.eval()
         # shift inputs by 1 for each 10 minute step after training so 0 stays training time
-        i_shift = (start_time-self.t_last_train).total_seconds()/(self.opt['dt_meas']*60)
+        i_shift = (start_time_gp-self.t_last_train).total_seconds()/(self.opt['dt_meas']*60)
         dt_factor = self.opt['dt_pred']/self.opt['dt_meas']
         # input: number of 10 minute steps since last training, 
         # non-integer possible for times that are not multiples of 10 minutes
         x = np.arange(steps)*dt_factor+i_shift+dt/self.opt['dt_meas']
         x = torch.from_numpy(x.reshape((-1,1)).astype(float))
+        if include_last_measurement:
+            x = x-1
         gp_pred_y = self.timeseries_likelihood(gp_timeseries(x))
         gp_mean, gp_var = gp_pred_y.mean, gp_pred_y.variance
+        if include_last_measurement:
+            gp_mean[0] = self.data_handler.generate_labels(start_time, steps_ahead=0)
+            gp_var[0] = 0
         # add NWP to get predicted value from prediction error
         NWP_pred = [self.data_handler.get_NWP(start_time, i*dt_factor) for i in range(steps)]
         gp_pred = np.array(NWP_pred).reshape((-1,1)) + gp_mean.reshape((-1,1)).detach().numpy()
         self.gp_predictions = self.gp_timeseries.covar_module.gp_predictions
+        
         return gp_pred[:,0], gp_var.detach().numpy()
     
     def get_pseudo_timeseries_gp(self, prediction_time, pseudo_measurements, pseudo_indices):
@@ -593,7 +605,7 @@ class PriorOnTimeseriesGP(WindPredictionGP):
 #     from get_gp_opt import get_gp_opt
 #     opt = get_gp_opt(n_z = 200, cashing=True)
     
-#     gp = PriorOnTimeseriesGP(opt)
+#     gp = TimeseriesModel(opt)
 #     t_start_predict = datetime.datetime(2022,8,1,1)
 #     steps = 120
 #     # gp.plot_prior(t_start_predict, steps)

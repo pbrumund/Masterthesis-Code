@@ -48,7 +48,6 @@ def get_power_curve_model():
     wind_speeds = power_curve_data[:,0]
     power_outputs = power_curve_data[:,1]
     power_curve = ca.interpolant('power_curve', 'bspline', [wind_speeds], power_outputs)
-    wind_speed_max = np.max(wind_speeds)
     P_min = np.min(power_outputs)
     P_max = np.max(power_outputs)
     w = ca.MX.sym('wind_speed')
@@ -66,6 +65,7 @@ def get_power_curve_model():
         'inverse_power_curve', 'bspline', [power_outputs_unique], wind_speeds_unique
     )
     wind_turbine = StaticWindTurbine(power_curve, inverse_power_curve, hub_height=110)
+    wind_turbine.cut_out_speed = np.max(wind_speeds)
     return wind_turbine
 
 

@@ -4,7 +4,7 @@ import casadi as ca
 
 from modules.mpc import NominalMPC, get_mpc_opt
 from modules.models import OHPS
-from modules.gp import PriorOnTimeseriesGP as WindPredictionGP
+from modules.gp import TimeseriesModel as WindPredictionGP
 from modules.gp import DataHandler
 from modules.gp import get_gp_opt
 from modules.plotting import TimeseriesPlot
@@ -31,6 +31,7 @@ SOC_traj = ca.DM.zeros(n_times)
 
 data_handler = DataHandler(datetime.datetime(2020,1,1), datetime.datetime(2022,12,31), gp_opt)
 x_k = ohps.x0
+P_gtg_last = ohps.gtg.bounds['ubu']
 v_last = None
 
 # create plots
@@ -42,11 +43,12 @@ plt_inputs = TimeseriesPlot('Time', 'Control input', ['Gas turbine power', 'Batt
 for k, t in enumerate(times):
     # get parameters: predicted wind speed, power demand, initial state
     wind_speeds = [data_handler.get_measurement(t, i) for i in range(nominal_mpc.horizon)] # perfect forecast
-    P_wtg = [ohps.wind_turbine.power_curve_fun(ohps.wind_turbine.scale_wind_speed(w)) for w in wind_speeds]
+    wind_speeds_nwp = [data_handler.get_NWP(t, i) for i in range(nominal_mpc.horizon)]
+    P_wtg = [ohps.wind_turbine.power_curve_fun(ohps.wind_turbine.scale_wind_speed(w)) for w in wind_speeds_nwp]
     wind_speeds = ca.vertcat(*wind_speeds)
-    P_demand = 1.5*ca.vertcat(*P_wtg)
-    P_demand = 8000*ca.DM.ones(nominal_mpc.horizon)
-    p = nominal_mpc.get_p_fun(x_k, wind_speeds, P_demand)
+    P_demand = ca.vertcat(*P_wtg) + 0.8*ohps.gtg.bounds['ubu']
+    # P_demand = 8000*ca.DM.ones(nominal_mpc.horizon)
+    p = nominal_mpc.get_p_fun(x_k, P_gtg_last, wind_speeds, P_demand)
 
     # get initial guess
     v_init = nominal_mpc.get_initial_guess(p, v_last)
@@ -81,6 +83,7 @@ for k, t in enumerate(times):
 
     # save last solution for next iteration
     v_last = v_opt
+    P_gtg_last = P_gtg
     
     # TODO: for simulation: maybe use smaller time scale and vary wind speed for each subinterval 
     # as wind power is not simply a function of the mean wind speed, 

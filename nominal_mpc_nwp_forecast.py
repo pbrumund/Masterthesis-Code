@@ -4,7 +4,7 @@ import casadi as ca
 
 from modules.mpc import NominalMPC, get_mpc_opt
 from modules.models import OHPS
-from modules.gp import PriorOnTimeseriesGP as WindPredictionGP
+from modules.gp import TimeseriesModel as WindPredictionGP
 from modules.gp import DataHandler
 from modules.gp import get_gp_opt
 from modules.plotting import TimeseriesPlot

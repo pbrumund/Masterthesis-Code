@@ -1,7 +1,8 @@
 import numpy as np
 import datetime
 from scipy.stats import norm
-from .wind_prediction_gp_gpytorch import PriorOnTimeseriesGP
+from .wind_prediction_gp_gpytorch import TimeseriesModel
+from .gp_direct_model import DirectGPEnsemble
 import matplotlib.pyplot as plt
 import os.path
 
@@ -62,7 +63,7 @@ def get_trajectory_nwp(weather_data, opt):
     return meas_traj
 
 def get_trajectory_gp_prior(weather_data, opt):
-    gp = PriorOnTimeseriesGP(opt)
+    gp = TimeseriesModel(opt)
     t_start = opt['t_start_score']
     t_end = opt['t_end_score']
     dt = t_end-t_start
@@ -96,7 +97,7 @@ def get_posterior_trajectories(opt):
         t_start = opt['t_start_score']
         t_end = opt['t_end_score'] - opt['steps_forward']*datetime.timedelta(minutes=10)
 
-    gp = PriorOnTimeseriesGP(opt)
+    gp = TimeseriesModel(opt)
 
     dt = t_end-t_start
     n_times = int(dt.total_seconds()/600)
@@ -120,6 +121,40 @@ def get_posterior_trajectories(opt):
         with open('modules/gp/scoring/trajectories_var_post.csv', 'a') as file:
             np.savetxt(file, trajectory_var_gp.reshape((1,-1)))    
     return trajectories_mean, trajectories_var
+
+def get_direct_model_trajectories(opt):
+    try:
+        trajectories_mean = np.loadtxt('modules/gp/scoring/trajectories_mean_direct.csv')
+        trajectories_var = np.loadtxt('modules/gp/scoring/trajectories_var_direct.csv')
+        n_calculated = trajectories_var.shape[0]
+        t_start = opt['t_start_score'] + n_calculated*datetime.timedelta(minutes=10)
+        t_end = opt['t_end_score'] - opt['steps_forward']*datetime.timedelta(minutes=10)
+        if t_start >= t_end: return trajectories_mean, trajectories_var
+
+    except:
+        t_start = opt['t_start_score']
+        t_end = opt['t_end_score'] - opt['steps_forward']*datetime.timedelta(minutes=10)
+
+    gp = DirectGPEnsemble(opt)
+
+    dt = t_end-t_start
+    n_times = int(dt.total_seconds()/600)
+    times = [t_start+i*datetime.timedelta(minutes=10) for i in range(n_times)]
+
+    trajectories_mean = np.zeros((n_times, opt['steps_forward']))
+    trajectories_var = np.zeros((n_times, opt['steps_forward']))
+
+    for i, time in enumerate(times):
+        trajectory_mean_gp, trajectory_var_gp = gp.predict_trajectory(
+            time, opt['steps_forward'])
+        trajectories_mean[i,:] = trajectory_mean_gp
+        trajectories_var[i,:] = trajectory_var_gp
+        with open('modules/gp/scoring/trajectories_mean_direct.csv', 'a') as file:
+            np.savetxt(file, trajectory_mean_gp.reshape((1,-1)))
+        with open('modules/gp/scoring/trajectories_var_direct.csv', 'a') as file:
+            np.savetxt(file, trajectory_var_gp.reshape((1,-1)))    
+    return trajectories_mean, trajectories_var
+
 
 if __name__ == '__main__':
     from get_gp_opt import get_gp_opt

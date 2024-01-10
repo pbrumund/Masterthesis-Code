@@ -17,6 +17,7 @@ class DirectGP(WindPredictionGP):
         self.opt = opt
         self.steps_ahead = steps_ahead
         self.order = opt['direct_model_order']
+        self.filename_gp = f'modules/gp/models/direct_model/gp_direct_{self.steps_ahead}'
         self.gp = self.load_gp_model()
         if self.gp is None:
             super().__init__(opt) # load data handler
@@ -36,7 +37,6 @@ class DirectGP(WindPredictionGP):
         return super().get_training_data(opt) 
 
     def load_gp_model(self):
-        self.filename_gp = f'modules/gp/models/gp_direct_{self.steps_ahead}'
         try:
             gp = tf.saved_model.load(self.filename_gp)
             if self.opt['verbose']:
@@ -50,7 +50,6 @@ class DirectGP(WindPredictionGP):
         and uncertainty based on NWP values
         see https://gpflow.github.io/GPflow/develop/notebooks/advanced/heteroskedastic.html
         """
-        self.filename_gp = f'modules/gp/models/gp_direct_{self.steps_ahead}'
         try:
             gp = tf.saved_model.load(self.filename_gp)
             print('loaded gp from file')
@@ -70,44 +69,60 @@ class DirectGP(WindPredictionGP):
             scale_transform=tfp.bijectors.Exp())
         
         # Kernel for last measurements
-        kernel_measurements_mean = gpf.kernels.Sum(
-            [gpf.kernels.SquaredExponential(lengthscales=[1], active_dims=[i]) 
-             for i in range(0, n_measurement_inputs)]
-        )
+        # kernel_measurements_mean = gpf.kernels.Sum(
+        #     [gpf.kernels.SquaredExponential(lengthscales=[1], active_dims=[i]) 
+        #      for i in range(0, n_measurement_inputs)]
+        # )
+        # kernel_measurements_mean = gpf.kernels.SquaredExponential(
+        #     lengthscales=[1]*n_measurement_inputs)
 
-        kernel_measurements_var = gpf.kernels.Sum(
-            [gpf.kernels.SquaredExponential(lengthscales=[.3], active_dims=[i]) 
-             for i in range(0, n_measurement_inputs)]
-        )
+        # kernel_measurements_var = gpf.kernels.Sum(
+        #     [gpf.kernels.SquaredExponential(lengthscales=[.3], active_dims=[i]) 
+        #      for i in range(0, n_measurement_inputs)]
+        # )
+        # kernel_measurements_var = gpf.kernels.SquaredExponential(
+        #     lengthscales=[1]*n_measurement_inputs)
         
-        kernel_nwp_mean = gpf.kernels.Sum(
-            [gpf.kernels.SquaredExponential(lengthscales=[1], active_dims=[i]) 
-             for i in range(n_measurement_inputs, n_inputs-1)]
-        )
-        kernel_nwp_var = gpf.kernels.Sum(
-            [gpf.kernels.SquaredExponential(lengthscales=[.3], active_dims=[i]) 
-             for i in range(n_measurement_inputs, n_inputs-1)]
-        )
+        # kernel_nwp_mean = gpf.kernels.Sum(
+        #     [gpf.kernels.SquaredExponential(lengthscales=[1], active_dims=[i]) 
+        #      for i in range(n_measurement_inputs, n_inputs-1)]
+        # )
+        # kernel_nwp_mean = gpf.kernels.SquaredExponential(
+        #     lengthscales=[1]*n_nwp_inputs)
+        
+        # kernel_nwp_var = gpf.kernels.Sum(
+        #     [gpf.kernels.SquaredExponential(lengthscales=[.3], active_dims=[i]) 
+        #      for i in range(n_measurement_inputs, n_inputs-1)]
+        # )
 
-
+        # kernel_nwp_var = gpf.kernels.SquaredExponential(
+        #     lengthscales=[1]*n_nwp_inputs)
+        kernel_mean_se = gpf.kernels.SquaredExponential(
+            lengthscales=[1]*(n_inputs-1), active_dims = range(n_inputs-1)
+        )
+        kernel_var_se = gpf.kernels.SquaredExponential(
+            lengthscales=[1]*(n_inputs-1), active_dims = range(n_inputs-1)
+        )
         kernel_mean = (
-            kernel_measurements_mean
-            + (kernel_nwp_mean
-            # + gpf.kernels.Periodic(
-            #     gpf.kernels.SquaredExponential(active_dims=[n_inputs-1]), period=365) 
+            kernel_mean_se
+            # kernel_measurements_mean
+            # * (kernel_nwp_mean
+            + gpf.kernels.Periodic(
+                gpf.kernels.SquaredExponential(active_dims=[n_inputs-1]), period=365) 
             # + gpf.kernels.Periodic(
             #     gpf.kernels.SquaredExponential(active_dims=[n_inputs-1]), period=1))
-            ))
+            )
         # gpf.set_trainable(kernel_mean.submodules[9].period, False)
         # gpf.set_trainable(kernel_mean.submodules[10].period, False)
         kernel_var = (
-            kernel_measurements_var
-            + (kernel_nwp_var
-            # + gpf.kernels.Periodic(
-            #     gpf.kernels.SquaredExponential(active_dims=[n_inputs-1]), period=365) 
+            kernel_var_se
+            # kernel_measurements_var
+            # * (kernel_nwp_var
+            + gpf.kernels.Periodic(
+                gpf.kernels.SquaredExponential(active_dims=[n_inputs-1]), period=365) 
             # + gpf.kernels.Periodic(
             #     gpf.kernels.SquaredExponential(active_dims=[n_inputs-1]), period=1)
-            ))
+            )
         # gpf.set_trainable(kernel_var.submodules[9].period, False)
         # gpf.set_trainable(kernel_var.submodules[10].period, False)
         kernel = gpf.kernels.SeparateIndependent(
@@ -224,16 +239,18 @@ class DirectGP(WindPredictionGP):
             
             max_epochs = self.opt['max_epochs_second_training']
             loss_lb = self.opt['loss_lb']
+            min_loss = 1e12
             for i in range(max_epochs+1):
                 try:
                     training_step()
                 except:
                     print('Likelihood is nan')
                     raise RuntimeError('Failed to train model')
-                if loss_fn().numpy() < loss_lb:
+                if loss_fn().numpy() < loss_lb or loss_fn().numpy()>1.01*min_loss:
                     break
                 if self.opt['verbose']:# and i%20==0:
                     print(f"Epoch {i} - Loss: {loss_fn().numpy() : .4f}")
+                if loss_fn().numpy() < min_loss: min_loss = loss_fn().numpy()
 
         # save gp
         self.gp.compiled_predict_f = tf.function(
@@ -270,7 +287,7 @@ class DirectGPEnsemble(WindPredictionGP):
         self.model_lut[steps_scaled] = int(model_steps)
         return int(model_steps)
     
-    def predict_trajectory(self, start_time, steps):
+    def predict_trajectory(self, start_time, steps, include_last_measurement=True):
         # dt = 0  # if start time is not multiple of 10 min, difference to last previous multiple to shift indices
         # if start_time.minute%self.opt['dt_meas'] != 0:
         #     dt = start_time.minute%self.opt['dt_meas']
@@ -279,21 +296,29 @@ class DirectGPEnsemble(WindPredictionGP):
         scale = self.opt['dt_pred']/self.opt['dt_meas']
         mean_traj = np.zeros(steps)
         var_traj = np.zeros(steps)
-        for step in range(1, steps+1):
+        if include_last_measurement:
+            start=0
+        else:
+            start=1
+        for step in range(start, steps+start):
+            if step==0:
+                mean_traj[step] = self.data_handler.get_measurement(start_time)
+                var_traj[step] = 0
+                continue
             step_scaled = step*scale
-            model_index = self.find_model(step_scaled)
-            model = self.models[model_index]
-            timesteps_shift = model_index - step_scaled
+            model_steps = self.find_model(step_scaled)
+            model = self.models[model_steps]
+            timesteps_shift = model_steps - step_scaled
             t_inputs = start_time - timesteps_shift*datetime.timedelta(minutes=self.opt['dt_meas'])
             gp_in = self.data_handler.generate_features(time=t_inputs,
                                                         n_last=model.order,
                                                         feature='error & nwp',
-                                                        steps_ahead=model_index
+                                                        steps_ahead=model_steps
                                                         ).reshape((1,-1))
             mean, var = model.gp.compiled_predict_y(gp_in)
             mean = mean + self.data_handler.get_NWP(start_time, step_scaled)
-            mean_traj[step-1] = mean
-            var_traj[step-1] = var
+            mean_traj[step-start] = mean
+            var_traj[step-start] = var
         return mean_traj, var_traj
 
 

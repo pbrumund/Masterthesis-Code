@@ -5,7 +5,7 @@ import numpy as np
 
 from modules.mpc import ChanceConstrainedMPC, get_mpc_opt
 from modules.models import OHPS
-from modules.gp import PriorOnTimeseriesGP as WindPredictionGP
+from modules.gp import TimeseriesModel as WindPredictionGP
 from modules.gp import DataHandler
 from modules.gp import get_gp_opt
 from modules.plotting import TimeseriesPlot
@@ -35,7 +35,7 @@ x_k = ohps.x0
 v_last = None
 
 # create plots
-plt_power = TimeseriesPlot('Time', 'Power output', #
+plt_power = TimeseriesPlot('Time', 'Power output', 
     ['Gas turbine', 'Battery', 'Wind turbine', 'Total power generation', 'Demand'])
 plt_SOC = TimeseriesPlot('Time', 'Battery SOC')
 plt_inputs = TimeseriesPlot('Time', 'Control input', ['Gas turbine power', 'Battery current'])

@@ -60,7 +60,7 @@ class WindPredictionGP:
             np.savetxt(filename_y, y_train)
         return X_train, y_train
 
-class PriorOnTimeseriesGP(WindPredictionGP):
+class TimeseriesModel(WindPredictionGP):
     """Generate training data for the prior GP using NWP as inputs"""
     def __init__(self, opt):
         super().__init__(opt)
@@ -515,7 +515,7 @@ if __name__ == '__main__':
     from get_gp_opt import get_gp_opt
     opt = get_gp_opt(n_z = 200, cashing=True)
     
-    gp = PriorOnTimeseriesGP(opt)
+    gp = TimeseriesModel(opt)
     t_start_predict = datetime.datetime(2022,8,1,1)
     steps = 60
     # gp.plot_prior(t_start_predict, steps)

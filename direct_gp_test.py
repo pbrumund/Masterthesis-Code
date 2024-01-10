@@ -6,11 +6,11 @@ import matplotlib.pyplot as plt
 import numpy as np
 
 if __name__ == "__main__":
-    from modules.gp import DirectGPEnsemble, get_gp_opt, PriorOnTimeseriesGP
-    gp_opt = get_gp_opt(dt_pred=5, verbose=True)
+    from modules.gp import DirectGPEnsemble, get_gp_opt, TimeseriesModel
+    gp_opt = get_gp_opt(dt_pred=10, verbose=True)
     direct_gp = DirectGPEnsemble(gp_opt)
-    gp_opt = get_gp_opt(dt_pred=5, verbose=False)
-    timeseries_gp = PriorOnTimeseriesGP(gp_opt)
+    gp_opt = get_gp_opt(dt_pred=10, verbose=False)
+    timeseries_gp = TimeseriesModel(gp_opt)
 
     # t_list = [
     #     datetime.datetime(2022,2,15),
@@ -29,9 +29,9 @@ if __name__ == "__main__":
         month = random.randint(1,12)
         day = random.randint(1,28)
         hour = random.randint(0,23)
-        minute = 5*random.randint(0,11)
+        minute = 10*random.randint(0,5)
         t = datetime.datetime(year, month, day, hour, minute)
-        times = [t + i*datetime.timedelta(minutes=5) for i in range(1, steps+1)]
+        times = [t + i*datetime.timedelta(minutes=10) for i in range(0, steps)]
         start = time.perf_counter()
         means_direct, vars_direct = direct_gp.predict_trajectory(t, steps)
         stop = time.perf_counter()
@@ -63,7 +63,7 @@ if __name__ == "__main__":
                         means_timeseries + 1*np.sqrt(vars_timeseries), alpha=0.4, color='tab:orange')
         plot_measurement, = ax.plot(times, [direct_gp.data_handler.get_measurement(t_i, 0)
                                            for t_i in times], color='tab:green')
-        plot_nwp, = ax.plot(times, [direct_gp.data_handler.get_NWP(t, 0.5*steps)
+        plot_nwp, = ax.plot(times, [direct_gp.data_handler.get_NWP(t, steps)
                                            for steps in range(steps)], color='tab:red')
         ax.set_xlabel('Time')
         ax.set_ylabel('Wind speed in m/s')

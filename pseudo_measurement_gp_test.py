@@ -1,4 +1,5 @@
 import datetime
+import random
 
 import casadi as ca
 import matplotlib.pyplot as plt
@@ -6,30 +7,35 @@ import numpy as np
 
 from modules.mpc import NominalMPC, get_mpc_opt
 from modules.models import OHPS
-from modules.gp import PriorOnTimeseriesGP as WindPredictionGP
+from modules.gp import TimeseriesModel as WindPredictionGP
 from modules.gp import DataHandler
 from modules.gp import get_gp_opt
 from modules.plotting import TimeseriesPlot
 
 plt.ion()
 dt_pred = 5
-steps = 30
+steps = 60
 std_list = (-1,0,1)
 dP_min = 2000
+tree_depth = 30
 
 gp_opt = get_gp_opt(dt_pred=dt_pred)
 gp = WindPredictionGP(gp_opt)
-
-t = datetime.datetime(2022,1,10,12,0)
-t_vec = [t + i*datetime.timedelta(minutes=dt_pred) for i in range(steps)]
 
 ohps = OHPS()
 def get_wind_power_traj(wind_speed_traj):
     return np.array([ohps.wind_turbine.power_curve_fun(ohps.wind_turbine.scale_wind_speed(w)) 
                      for w in wind_speed_traj]).reshape(-1)
 
-mean, var = gp.predict_trajectory(t, steps, train=True)
-for tree_depth in range(0,30,5):
+for k in range(5):
+    year = 2022
+    month = random.randint(1,12)
+    day = random.randint(1,28)
+    hour = random.randint(0,23)
+    minute = 5*random.randint(0,11)
+    t = datetime.datetime(year, month, day, hour, minute)
+    t_vec = [t + i*datetime.timedelta(minutes=dt_pred) for i in range(steps)]
+    mean, var = gp.predict_trajectory(t, steps, train=True)
     means_i = [mean]
     vars_i = [var]
     last_pseudo_inputs = [np.array([])]
@@ -91,12 +97,17 @@ for tree_depth in range(0,30,5):
         plt.plot(t_vec, mean_i)
         plt.fill_between(t_vec, mean_i-np.sqrt(var_i), mean_i+np.sqrt(var_i), alpha=0.2)
     plt.show()
+    plt.xlabel('Time')
+    plt.ylabel('Predicted wind speed')
     plt.figure()
     for mean_i, var_i in zip(means, vars):
         plt.plot(t_vec, get_wind_power_traj(mean_i))
         plt.fill_between(t_vec, get_wind_power_traj(mean_i-np.sqrt(var_i)), 
                          get_wind_power_traj(mean_i+np.sqrt(var_i)), alpha=0.2)
     plt.show()
+    plt.xlabel('Time')
+    plt.ylabel('Predicted wind power')
+    plt.pause(0.5)
 # w_1 = mean[i] + np.sqrt(var[i])
 # w_2 = mean[i] - np.sqrt(var[i])
 # pseudo_indices = np.array(i)

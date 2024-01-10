@@ -6,7 +6,7 @@ from ..models import OHPS
 class NominalMPC(MPC):
     def __init__(self, ohps: OHPS, opt):
         self.ohps = ohps
-        self.ohps.setup_integrator(dt=600)
+        self.ohps.setup_integrator(dt=60*opt['dt'])
         self.horizon = opt['N']
         self.sampling_frequency = opt['dt']
         self.nx = self.ohps.nx
@@ -48,18 +48,21 @@ class NominalMPC(MPC):
         initial state, predicted wind speed and power demand
         """
         x0 = ca.MX.sym('x0', self.nx)
+        P_gtg_0 = ca.MX.sym('P_gtg_0') # to penalize large changes of the gas turbine power output
         wind_speeds = ca.MX.sym('wind_speed', self.horizon)
         P_demand = ca.MX.sym('P_demand', self.horizon)
-        p = ca.vertcat(x0, wind_speeds, P_demand)
+        p = ca.vertcat(x0, P_gtg_0, wind_speeds, P_demand)
         self.get_x0_fun = ca.Function('get_x0', [p], [x0], ['p'], ['x0'])
+        self.get_P_gtg_0_fun = ca.Function('get_P_gtg_0', [p], [P_gtg_0], ['p'], ['P_gtg_0'])
         self.get_wind_speed_fun = ca.Function('get_wind_speed', [p], [wind_speeds], 
                                               ['p'], ['wind_speeds'])
         self.get_P_demand_fun = ca.Function('get_P_demand', [p], [P_demand], ['p'], ['P_demand'])
-        self.get_p_fun = ca.Function('get_p', [x0, wind_speeds, P_demand], [p], 
-                                     ['x0', 'wind_speeds', 'P_demand'], ['p'])
+        self.get_p_fun = ca.Function('get_p', [x0, P_gtg_0, wind_speeds, P_demand], [p], 
+                                     ['x0', 'P_gtg_last', 'wind_speeds', 'P_demand'], ['p'])
         return p
 
-    def stage_cost(self, state, input, s_P):
+    def stage_cost(self, state, input, s_P, P_gtg_last=None):
+        # P_gtg_last = None
         alpha_1 = self.param['alpha_1']
         alpha_2 = self.param['alpha_2']
         x_gtg = self.ohps.get_x_gtg(state)
@@ -68,13 +71,15 @@ class NominalMPC(MPC):
         load = P_gtg/self.param['P_gtg_max']
         eta_gtg = ca.if_else(load>0.01, alpha_1*load**2 + alpha_2*load, 0)  # TODO: add efficiency to model 
         eta_max = self.param['eta_gtg_max']
-        J_gtg = self.param['k_gtg_eta']*(eta_gtg-eta_max)**2 + self.param['k_gtg_P']*P_gtg
+        J_gtg = self.param['k_gtg_eta']*(eta_gtg-eta_max)**2 + self.param['k_gtg_P']*load
         x_bat = self.ohps.get_x_bat(state)
         u_bat = self.ohps.get_u_bat(input)
         SOC = self.ohps.battery.get_SOC_fun(x_bat, u_bat)
         J_bat = -self.param['k_bat']*SOC
         J_u = input.T@self.param['R_input']@input
-        J_s_P = s_P.T*self.param['r_s_P']*s_P
+        J_s_P = s_P.T*self.param['r_s_P']*s_P/(8000+4500)
+        # if P_gtg_last is not None:
+        #     J_gtg += self.param['k_gtg_dP']*ca.fabs(P_gtg-P_gtg_last)/self.param['P_gtg_max']
         return J_gtg+J_bat+J_u+J_s_P
     
     def cost_function(self, v, p):
@@ -85,7 +90,7 @@ class NominalMPC(MPC):
         s_P = self.get_s_from_v_fun(v)
         # get initial state from parameters
         x0 = self.get_x0_fun(p)
-
+        P_gtg_last = self.get_P_gtg_0_fun(p)
         J = 0
         for i in range(self.horizon):
             if i == 0:
@@ -94,7 +99,10 @@ class NominalMPC(MPC):
                 x_i = X_mat[i-1,:]
             u_i = U_mat[i,:].T
             s_P_i = s_P[i,:]
-            J += self.stage_cost(x_i, u_i, s_P_i) 
+            J += self.stage_cost(x_i, u_i, s_P_i, P_gtg_last)
+            P_gtg = u_i[0]
+            J += self.param['k_gtg_dP']*ca.fabs(P_gtg-P_gtg_last)/self.param['P_gtg_max']
+            P_gtg_last = P_gtg#self.ohps.get_P_gtg(x_i, u_i, 0)
             # TODO: maybe integrate cost function over interval instead of adding terms at discretization points
         # If needed, add terminal cost term here
         return J
@@ -127,8 +135,8 @@ class NominalMPC(MPC):
             # x_k+1 - f(x_k, u_k) = 0^
             # TODO: possibly test implicit RK method for discretisation of dynamic model
             g_state = X_mat[i,:] - x_next
-            g_state_lb = 0
-            g_state_ub = 0
+            g_state_lb = ca.DM.zeros(self.nx)
+            g_state_ub = ca.DM.zeros(self.nx)
             g.append(g_state)
             g_lb.append(g_state_lb)
             g_ub.append(g_state_ub)
@@ -179,16 +187,20 @@ class NominalMPC(MPC):
             X_last = self.get_x_from_v_fun(v_last)
             s_P_last = self.get_s_from_v_fun(v_last)
             # shift states and inputs, repeat last value
-            U_init = ca.vertcat(U_last[1:,:], ca.DM.zeros(1,self.nu))
+            U_init = ca.vertcat(U_last[1:,:], U_last[-1,:])
             X_init = ca.vertcat(X_last[1:,:], X_last[-1,:])
             P_demand = self.get_P_demand_fun(p)
             s_P_init = ca.vertcat(s_P_last[1:,:], P_demand[-1])
             return self.get_v_fun(U_init, X_init, s_P_init)
         # No last solution provided, guess zeros for inputs and initial state for X
-        #P_gtg_init = ca.
-        U_init = ca.DM.zeros(self.horizon, self.nu)
+        P_gtg_init = 0.8*self.ohps.gtg.bounds['ubu']*ca.DM.ones(self.horizon)
+        I_bat_init = ca.DM.zeros(self.horizon)
+        U_init = ca.horzcat(P_gtg_init, I_bat_init)
+        # U_init = ca.DM.zeros(self.horizon, self.nu)
         X_init = ca.DM.ones(self.horizon)@self.ohps.x0.T
-        s_P_init = 1/3*self.get_P_demand_fun(p)
+        P_demand = self.get_P_demand_fun(p)
+        # s_P_init = P_demand - self.ohps.gtg.bounds['ubu']*ca.DM.ones(self.horizon)
+        # s_P_init = 1/3*self.get_P_demand_fun(p)
         s_P_init = ca.DM.zeros(self.horizon)
         return self.get_v_fun(U_init, X_init, s_P_init)
 

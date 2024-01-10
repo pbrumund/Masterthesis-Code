@@ -62,6 +62,12 @@ class OHPS(DynamicModel):
         u_wtg = self.get_u_wtg(u)
         return self.wind_turbine.get_power_output(x_wtg, u_wtg, w)
     
+    def get_P_tot(self, x, u, w):
+        P_gtg = self.get_P_gtg(x, u, w)
+        P_bat = self.get_P_bat(x, u, w)
+        P_wtg = self.get_P_wtg(x, u, w)
+        return P_gtg + P_bat + P_wtg
+    
     def get_SOC_bat(self, x, u, w):
         x_bat = self.get_x_bat(x)
         u_bat = self.get_u_bat(u)
@@ -88,7 +94,6 @@ class OHPS(DynamicModel):
         self.wind_turbine.set_parameter_values(p_wtg)
         super().set_parameter_values(p)
 
-    
 
 if __name__ == "__main__":
     ohps = OHPS()
