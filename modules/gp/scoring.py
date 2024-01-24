@@ -1,12 +1,13 @@
 import numpy as np
 import datetime
 from scipy.stats import norm
-from .wind_prediction_gp_gpytorch import TimeseriesModel
+from .gp_timeseries_model import TimeseriesModel
 from .gp_direct_model import DirectGPEnsemble
 import matplotlib.pyplot as plt
 import os.path
 
 from .utils import get_NWP, get_wind_value, generate_features
+from .data_handling import DataHandler
 from .fileloading import load_weather_data
 
 def get_rmse(trajectory_measured, trajectory_predicted):
@@ -64,6 +65,7 @@ def get_trajectory_nwp(weather_data, opt):
 
 def get_trajectory_gp_prior(weather_data, opt):
     gp = TimeseriesModel(opt)
+    dh = gp.data_handler
     t_start = opt['t_start_score']
     t_end = opt['t_end_score']
     dt = t_end-t_start
@@ -75,7 +77,7 @@ def get_trajectory_gp_prior(weather_data, opt):
     var_traj = np.zeros(n_steps)
     for i, t in enumerate(times):
             NWP_traj[i] = get_NWP(weather_data, t, 0)
-            x = generate_features(weather_data, t, feature='nwp & time').reshape((1,-1))
+            x = dh.generate_features(t, feature='nwp & time', steps_ahead=0).reshape((1,-1))
             mean, var = gp.gp_prior.compiled_predict_y(x)
             mean_traj[i] = mean
             var_traj[i] = var

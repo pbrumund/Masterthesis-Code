@@ -2,6 +2,7 @@ import casadi as ca
 
 from .mpc_class import MPC
 from ..models import OHPS
+from .get_mpc_opt import get_nlp_opt
 
 class NominalMPC(MPC):
     def __init__(self, ohps: OHPS, opt):
@@ -61,14 +62,14 @@ class NominalMPC(MPC):
                                      ['x0', 'P_gtg_last', 'wind_speeds', 'P_demand'], ['p'])
         return p
 
-    def stage_cost(self, state, input, s_P, P_gtg_last=None):
+    def stage_cost(self, state, input, s_P, i, P_gtg_last=None):
         # P_gtg_last = None
         alpha_1 = self.param['alpha_1']
         alpha_2 = self.param['alpha_2']
         x_gtg = self.ohps.get_x_gtg(state)
         u_gtg = self.ohps.get_u_gtg(input)
         P_gtg = self.ohps.gtg.get_power_output(x_gtg, u_gtg, None)
-        load = P_gtg/self.param['P_gtg_max']
+        load = P_gtg/self.ohps.P_gtg_max
         eta_gtg = ca.if_else(load>0.01, alpha_1*load**2 + alpha_2*load, 0)  # TODO: add efficiency to model 
         eta_max = self.param['eta_gtg_max']
         J_gtg = self.param['k_gtg_eta']*(eta_gtg-eta_max)**2 + self.param['k_gtg_P']*load
@@ -77,9 +78,19 @@ class NominalMPC(MPC):
         SOC = self.ohps.battery.get_SOC_fun(x_bat, u_bat)
         J_bat = -self.param['k_bat']*SOC
         J_u = input.T@self.param['R_input']@input
-        J_s_P = s_P.T*self.param['r_s_P']*s_P/(8000+4500)
-        # if P_gtg_last is not None:
-        #     J_gtg += self.param['k_gtg_dP']*ca.fabs(P_gtg-P_gtg_last)/self.param['P_gtg_max']
+        J_s_P = self.param['r_s_P']*s_P/(self.ohps.P_wtg_max+self.ohps.P_gtg_max)*0.95**i
+        # J_gtg_dP = self.param['k_gtg_dP']*ca.log(100*ca.fabs(u_gtg)/self.ohps.gtg.bounds['ubu']+1)
+        # J_gtg += J_gtg_dP
+        if P_gtg_last is not None:
+            J_gtg += self.param['k_gtg_dP']*((P_gtg-P_gtg_last)/self.ohps.P_gtg_max)**2
+        # functions for individual terms for tuning parameters
+        self.J_gtg_i = J_gtg
+        self.J_gtg_P_i =self.param['k_gtg_P']*load
+        self.J_gtg_eta_i = self.param['k_gtg_eta']*(eta_gtg-eta_max)**2
+        self.J_gtg_dP_i = self.param['k_gtg_dP']*((P_gtg-P_gtg_last)/self.ohps.P_gtg_max)**2
+        self.J_bat_i = J_bat
+        self.J_u_i = J_u
+        self.J_s_P_i = J_s_P
         return J_gtg+J_bat+J_u+J_s_P
     
     def cost_function(self, v, p):
@@ -92,6 +103,7 @@ class NominalMPC(MPC):
         x0 = self.get_x0_fun(p)
         P_gtg_last = self.get_P_gtg_0_fun(p)
         J = 0
+        self.J_gtg = self.J_gtg_P = self.J_gtg_eta = self.J_gtg_dP = self.J_bat = self.J_u = self.J_s_P = 0
         for i in range(self.horizon):
             if i == 0:
                 x_i = x0
@@ -99,12 +111,35 @@ class NominalMPC(MPC):
                 x_i = X_mat[i-1,:]
             u_i = U_mat[i,:].T
             s_P_i = s_P[i,:]
-            J += self.stage_cost(x_i, u_i, s_P_i, P_gtg_last)
-            P_gtg = u_i[0]
-            J += self.param['k_gtg_dP']*ca.fabs(P_gtg-P_gtg_last)/self.param['P_gtg_max']
+            J += self.stage_cost(x_i, u_i, s_P_i, i, P_gtg_last)
+            # Parameter tuning
+            self.J_gtg += self.J_gtg_i
+            self.J_gtg_P += self.J_gtg_P_i
+            self.J_gtg_eta += self.J_gtg_eta_i
+            self.J_gtg_dP += self.J_gtg_dP_i
+            self.J_bat += self.J_bat_i
+            self.J_u += self.J_u_i
+            self.J_s_P += self.J_s_P_i
+
+            P_gtg = self.ohps.get_P_gtg(x_i, u_i, 0)
+            # J += self.param['k_gtg_dP']*ca.log(100*ca.fabs(P_gtg-P_gtg_last)/self.param['P_gtg_max']+1)
             P_gtg_last = P_gtg#self.ohps.get_P_gtg(x_i, u_i, 0)
             # TODO: maybe integrate cost function over interval instead of adding terms at discretization points
         # If needed, add terminal cost term here
+        X_last = X_mat[-1,:]
+        SOC_bat_last = self.ohps.get_SOC_bat(X_last, 0, 0)
+        J_bat = -self.param['k_bat_final']*SOC_bat_last
+        self.J_bat += J_bat
+        J += J_bat
+        # Parameter tuning
+        self.J_fun = ca.Function('J', [v, p], [J])
+        self.J_gtg_fun = ca.Function('J_gtg', [v, p], [self.J_gtg])
+        self.J_gtg_P_fun = ca.Function('J_gtg_P', [v, p], [self.J_gtg_P])
+        self.J_gtg_eta_fun = ca.Function('J_gtg_eta', [v, p], [self.J_gtg_eta])
+        self.J_gtg_dP_fun = ca.Function('J_gtg_dP', [v, p], [self.J_gtg_dP])
+        self.J_bat_fun = ca.Function('J_bat', [v, p], [self.J_bat])
+        self.J_u_fun = ca.Function('J_u', [v, p], [self.J_u])
+        self.J_s_P_fun = ca.Function('J_s_P', [v, p], [self.J_s_P])
         return J
     def get_constraints(self, v, p):
         """
@@ -134,7 +169,7 @@ class NominalMPC(MPC):
             # System dynamics
             # x_k+1 - f(x_k, u_k) = 0^
             # TODO: possibly test implicit RK method for discretisation of dynamic model
-            g_state = X_mat[i,:] - x_next
+            g_state = X_mat[i,:].T - x_next
             g_state_lb = ca.DM.zeros(self.nx)
             g_state_ub = ca.DM.zeros(self.nx)
             g.append(g_state)
@@ -170,7 +205,7 @@ class NominalMPC(MPC):
             'g': g,
             'p': p
         }
-        nlp_opt = self.get_nlp_opt()
+        nlp_opt = get_nlp_opt()
         self._solver = ca.nlpsol('mpc_solver', 'ipopt', nlp, nlp_opt)
         v_init = ca.MX.sym('v_init', v.shape)
 
@@ -195,8 +230,8 @@ class NominalMPC(MPC):
         # No last solution provided, guess zeros for inputs and initial state for X
         P_gtg_init = 0.8*self.ohps.gtg.bounds['ubu']*ca.DM.ones(self.horizon)
         I_bat_init = ca.DM.zeros(self.horizon)
-        U_init = ca.horzcat(P_gtg_init, I_bat_init)
-        # U_init = ca.DM.zeros(self.horizon, self.nu)
+        # U_init = ca.horzcat(P_gtg_init, I_bat_init)
+        U_init = ca.DM.zeros(self.horizon, self.nu)
         X_init = ca.DM.ones(self.horizon)@self.ohps.x0.T
         P_demand = self.get_P_demand_fun(p)
         # s_P_init = P_demand - self.ohps.gtg.bounds['ubu']*ca.DM.ones(self.horizon)

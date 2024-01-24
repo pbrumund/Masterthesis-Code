@@ -37,7 +37,7 @@ def get_shepherd_model() -> Battery:
     }
 
     # no-load voltage
-    E = E0 - K*Q/(Q-int_idt) + A*ca.exp(-B*int_idt)
+    E = E0 - K*Q/(Q-int_idt)*i/N_p + A*ca.exp(-B*int_idt) # Factor i missing in Tremblay paper
 
     # Outputs
     V_batt = N_s*(E - R*i/N_p)
@@ -65,7 +65,7 @@ def get_shepherd_model_LiIon(N_p=1, N_s=1):
     battery.set_parameter('Q', 1)
     battery.set_parameter('N_p', N_p)
     battery.set_parameter('N_s', N_s)
-    battery.set_bounds(lbx=ca.DM(0.1), ubx=ca.DM(0.8), lbu=ca.DM(-5000), ubu=ca.DM(5000))
+    battery.set_bounds(lbx=ca.DM(0.1), ubx=ca.DM(0.8), lbu=ca.DM(-1*N_p), ubu=ca.DM(1*N_p))
     battery.get_SOC_fun = ca.Function('get_SOC', [battery._x, battery._u], 
         [battery.get_SOC_fun(battery._x, battery._u, battery.parameter_values[2])], 
         ['x', 'u'], ['SOC'])

@@ -21,17 +21,19 @@ class ChanceConstrainedMPC(NominalMPC):
         initial state, predicted wind speed and power demand
         """
         x0 = ca.MX.sym('x0', self.nx)
+        P_gtg_0 = ca.MX.sym('P_gtg_0') # to penalize large changes of the gas turbine power output
         wind_speeds = ca.MX.sym('wind_speed', self.horizon)
         wind_speed_std = ca.MX.sym('std', self.horizon)
         P_demand = ca.MX.sym('P_demand', self.horizon)
-        p = ca.vertcat(x0, wind_speeds, wind_speed_std, P_demand)
+        p = ca.vertcat(x0, P_gtg_0, wind_speeds, wind_speed_std, P_demand)
         self.get_x0_fun = ca.Function('get_x0', [p], [x0], ['p'], ['x0'])
+        self.get_P_gtg_0_fun = ca.Function('get_P_gtg_0', [p], [P_gtg_0], ['p'], ['P_gtg_0'])
         self.get_wind_speed_fun = ca.Function('get_wind_speed', [p], [wind_speeds], 
                                               ['p'], ['wind_speeds'])
         self.get_std_fun = ca.Function('get_std', [p], [wind_speed_std], ['p'], ['std'])
         self.get_P_demand_fun = ca.Function('get_P_demand', [p], [P_demand], ['p'], ['P_demand'])
-        self.get_p_fun = ca.Function('get_p', [x0, wind_speeds, wind_speed_std, P_demand], [p], 
-                                     ['x0', 'wind_speeds', 'standard deviation', 'P_demand'], ['p'])
+        self.get_p_fun = ca.Function('get_p', [x0, P_gtg_0, wind_speeds, wind_speed_std, P_demand], [p], 
+                                     ['x0', 'P_gtg_last', 'wind_speeds', 'standard deviation', 'P_demand'], ['p'])
         return p
     
     def get_constraints(self, v, p):
@@ -73,7 +75,6 @@ class ChanceConstrainedMPC(NominalMPC):
             g_lb.append(g_state_lb)
             g_ub.append(g_state_ub)
             # Power constraint
-            # TODO: what happens if wind speed is possibly above cut-out speed? Include upper inverval border as well
             # P_demand - (P_gtg + P_bat + P_wtg + s_P) <= 0
             P_gtg = self.ohps.get_P_gtg(x_i, u_i, wind_speeds[i])
             P_bat = self.ohps.get_P_bat(x_i, u_i, wind_speeds[i])

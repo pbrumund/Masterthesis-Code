@@ -48,8 +48,20 @@ def get_static_GTG():
     P_gtg = ca.SX.sym('P_gtg')
     x = ca.SX.sym('x', 0)
     gtg = GasTurbineGenerator(x, P_gtg, {}, P_gtg, x)
-    gtg.set_bounds(lbx=ca.DM.zeros(0), ubx=ca.DM.ones(0), lbu=ca.DM(0), ubu=ca.DM(4500))
+    P_gtg_max = 32000
+    gtg.set_bounds(lbx=ca.DM.zeros(0), ubx=ca.DM.ones(0), lbu=ca.DM(0), ubu=ca.DM(P_gtg_max))
     gtg.x0 = ca.DM.zeros(0)
+    gtg.P_max = P_gtg_max
+    return gtg
+
+def get_integrator_GTG(dt):
+    dP_gtg = ca.SX.sym('dP_gtg')
+    P_gtg_last = ca.SX.sym('P_gtg_last')
+    dxdt = dP_gtg/dt
+    P_gtg = P_gtg_last + dP_gtg
+    gtg = GasTurbineGenerator(P_gtg_last, dP_gtg, {}, P_gtg, dxdt)
+    gtg.set_bounds(lbx=ca.DM(0),ubx=ca.DM(4500),lbu=ca.DM(-4500), ubu=ca.DM(4500))
+    gtg.x0 = ca.DM(4500)
     return gtg
 
 if __name__ == "__main__":

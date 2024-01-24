@@ -8,9 +8,9 @@ import numpy as np
 if __name__ == "__main__":
     from modules.gp import DirectGPEnsemble, get_gp_opt, TimeseriesModel
     gp_opt = get_gp_opt(dt_pred=10, verbose=True)
-    direct_gp = DirectGPEnsemble(gp_opt)
-    gp_opt = get_gp_opt(dt_pred=10, verbose=False)
     timeseries_gp = TimeseriesModel(gp_opt)
+    gp_opt = get_gp_opt(dt_pred=10, verbose=True)
+    direct_gp = DirectGPEnsemble(gp_opt)
 
     # t_list = [
     #     datetime.datetime(2022,2,15),

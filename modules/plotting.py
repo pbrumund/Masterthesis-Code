@@ -5,14 +5,15 @@ import numpy as np
 plt.ion()
 
 class TimeseriesPlot:
-    def __init__(self, xlabel, ylabel, timeseries_names = None):
+    def __init__(self, xlabel, ylabel, timeseries_names = None, title=None):
         self.xlabel = xlabel
         self.ylabel = ylabel
         self.timeseries_names = timeseries_names
         self.is_setup = False
+        self.title = title
     
     def setup_plot(self):
-        self.fig = plt.figure()
+        self.fig = plt.figure(self.title)
         self.ax = plt.axes()
         self.is_setup = True
 
@@ -43,5 +44,5 @@ class TimeseriesPlot:
         self.ax.set_ylabel(self.ylabel)
         if self.timeseries_names is not None:
             self.ax.legend()
-        plt.pause(0.01)
+        # plt.pause(0.01)
 

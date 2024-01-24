@@ -1,8 +1,10 @@
 import casadi as ca
 import numpy as np
 from scipy.stats import norm
+import datetime
 
 from .mpc_class import MPC
+from .get_mpc_opt import get_nlp_opt
 from ..models import OHPS
 from ..gp import TimeseriesModel
 
@@ -24,12 +26,12 @@ class MultistageMPC(MPC):
     # to use in combination with multi-stage MPC
     # TODO: maybe class for nodes that generates the necessary symbolics to build tree
     pass
-    def generate_scenario(self, start_time, train=False):
+    def generate_scenario(self, start_time, train=False, first_value_known=True):
         certainty_horizon = self.opt['certainty_horizon']   # minimum steps before branching
         robust_horizon = self.opt['robust_horizon'] # maximum step for branching
         max_scenarios = self.opt['max_scenarios']   # maximum number of branches
         branching_interval = self.opt['branching_interval'] # only branch every braching_interval steps
-        std_list = (-1,0,1) # number of standard deviations for scenario generation
+        std_list = self.opt['std_list_multistage'] # number of standard deviations for scenario generation
         norm_factor = sum(norm.pdf(x) for x in std_list) # to keep sum of probabilities at 1
         dP_min = self.opt['dP_min'] # minimum wind power difference at +-1 std for branching
 
@@ -71,9 +73,9 @@ class MultistageMPC(MPC):
                 means_par.append(mean[i]) # keep mean/variance of current scenario even if branching
                 vars_par.append(var[i])
                 # Check if power difference large enough
-                P_upper = self.ohps.wind_turbine.power_curve_fun(
+                P_upper = self.ohps.n_wind_turbines*self.ohps.wind_turbine.power_curve_fun(
                     self.ohps.wind_turbine.scale_wind_speed(mean[i]+np.sqrt(var[i])))
-                P_lower = self.ohps.wind_turbine.power_curve_fun(
+                P_lower = self.ohps.n_wind_turbines*self.ohps.wind_turbine.power_curve_fun(
                     self.ohps.wind_turbine.scale_wind_speed(mean[i]-np.sqrt(var[i])))
                 if np.abs(P_upper-P_lower) < dP_min:
                     # Keep trajectories, do not branch this scenario
@@ -147,7 +149,7 @@ class MultistageMPC(MPC):
         p = ca.vertcat(*[node.p for node in nodes_flattened])
         J = sum(node.J for node in nodes_flattened)
         nlp = {'f': J, 'x': v_vec, 'g': g, 'p': p}
-        nlp_opt = self.get_nlp_opt()
+        nlp_opt = get_nlp_opt()
         _solver = ca.nlpsol('multistage_mpc', 'ipopt', nlp, nlp_opt)
         v_init = ca.MX.sym('v_init', v_vec.shape)
         self.solver = ca.Function(
@@ -155,7 +157,22 @@ class MultistageMPC(MPC):
             [_solver(x0=v_init, p=p, lbx=v_lb, ubx=v_ub, lbg=g_lb, ubg=g_ub)['x']],
             ['v_init', 'p'], ['v_opt'])
         
-
+        self.J_gtg = sum(node.J_gtg*node.probability for node in nodes_flattened)
+        self.J_gtg_P = sum(node.J_gtg_P*node.probability for node in nodes_flattened)
+        self.J_gtg_eta = sum(node.J_gtg_eta*node.probability for node in nodes_flattened)
+        self.J_gtg_dP = sum(node.J_gtg_dP*node.probability for node in nodes_flattened)
+        self.J_bat = sum(node.J_bat*node.probability for node in nodes_flattened)
+        self.J_s_P = sum(node.J_s_P*node.probability for node in nodes_flattened)
+        self.J_u = sum(node.J_u*node.probability for node in nodes_flattened)
+        self.J_fun = ca.Function('J', [v_vec, p], [J])
+        self.J_gtg_fun = ca.Function('J_gtg', [v_vec, p], [self.J_gtg])
+        self.J_gtg_P_fun = ca.Function('J_gtg_P', [v_vec, p], [self.J_gtg_P])
+        self.J_gtg_eta_fun = ca.Function('J_gtg_eta', [v_vec, p], [self.J_gtg_eta])
+        self.J_gtg_dP_fun = ca.Function('J_gtg_dP', [v_vec, p], [self.J_gtg_dP])
+        self.J_bat_fun = ca.Function('J_bat', [v_vec, p], [self.J_bat])
+        self.J_u_fun = ca.Function('J_u', [v_vec, p], [self.J_u])
+        self.J_s_P_fun = ca.Function('J_s_P', [v_vec, p], [self.J_s_P])
+        
     def get_initial_guess(self, v_last = None, wind_power_vec = None, x0 = None, 
                           P_demand = None):
         if v_last is not None:
@@ -194,23 +211,20 @@ class MultistageMPC(MPC):
             u_init_list.append(u_init)
         return ca.vertcat(*v_init)
                 
-    def get_parameters(self, x0, P_demand):
+    def get_parameters(self, x0, P_gtg_last, P_demand):
         p = []
         for i, nodes_i in enumerate(self.nodes):
             for node in nodes_i:
                 p_i_k = []
                 if i == 0:
                     p_i_k.append(x0)
+                    p_i_k.append(P_gtg_last)
                 p_i_k.append(P_demand[i])
                 p_i_k = node.get_p_fun(*p_i_k)
                 p.append(p_i_k)
         return ca.vertcat(*p)
-        
 
 
-
-
-            
 class TreeNode:
     # TODO: Methods for branching and getting single successor, likelihood
     def __init__(self, ohps: OHPS, time_index, node_index, opt, probability, 
@@ -264,6 +278,8 @@ class TreeNode:
         if self.is_root_node:
             self.x0 = ca.MX.sym('x0', self.ohps.nx)
             self.param.append(self.x0)
+            self.P_gtg_last = ca.MX.sym('P_gtg_last')
+            self.param.append(self.P_gtg_last)
         if self.wind_pred is None:
             self.wind_speed = ca.MX.sym(f'wind_speed_{self.time_index}_{self.node_index}')
             self.param.append(self.wind_speed)
@@ -304,8 +320,8 @@ class TreeNode:
             wind_speed = wind_speed - self.back_off_factor*wind_std
         P_gtg = self.ohps.get_P_gtg(self.x, self.u, wind_speed)
         P_bat = self.ohps.get_P_bat(self.x, self.u, wind_speed)
-        P_wtg_backoff = self.ohps.get_P_wtg(self.x, self.u, wind_speed)
-        g_demand = self.P_demand - P_gtg - P_bat - P_wtg_backoff - self.s_P
+        P_wtg = self.ohps.get_P_wtg(self.x, self.u, wind_speed)
+        g_demand = self.P_demand - P_gtg - P_bat - P_wtg - self.s_P
         g_demand_lb = -ca.inf
         g_demand_ub = 0
         self.constraints.append(g_demand)
@@ -320,17 +336,27 @@ class TreeNode:
         alpha_2 = self.opt['param']['alpha_2']
         x_gtg = self.ohps.get_x_gtg(self.x)
         u_gtg = self.ohps.get_u_gtg(self.u)
-        P_gtg = self.ohps.gtg.get_power_output(x_gtg, u_gtg, None)
-        load = P_gtg/self.opt['param']['P_gtg_max']
+        self.P_gtg = self.ohps.gtg.get_power_output(x_gtg, u_gtg, None)
+        load = self.P_gtg/self.ohps.P_gtg_max
+        self.J_gtg_P = self.opt['param']['k_gtg_P']*load
         eta_gtg = ca.if_else(load>0.01, alpha_1*load**2 + alpha_2*load, 0)  # TODO: add efficiency to model 
         eta_max = self.opt['param']['eta_gtg_max']
-        J_gtg = self.opt['param']['k_gtg_eta']*(eta_gtg-eta_max)**2 + self.opt['param']['k_gtg_P']*P_gtg
+        self.J_gtg_eta = self.opt['param']['k_gtg_eta']*(eta_gtg-eta_max)**2
+        if self.is_root_node:
+            P_gtg_last = self.P_gtg_last
+        else:
+            P_gtg_last = self.predecessor.P_gtg
+        self.J_gtg_dP = (self.opt['param']['k_gtg_dP']*
+                    ((self.P_gtg-P_gtg_last)/self.ohps.P_gtg_max)**2)
+        self.J_gtg = self.J_gtg_P + self.J_gtg_eta + self.J_gtg_dP
         x_bat = self.ohps.get_x_bat(self.x)
         u_bat = self.ohps.get_u_bat(self.u)
         SOC = self.ohps.battery.get_SOC_fun(x_bat, u_bat)
-        J_bat = -self.opt['param']['k_bat']*SOC
-        J_u = self.u.T@self.opt['param']['R_input']@self.u
-        J_s_P = self.s_P.T@self.opt['param']['r_s_P']@self.s_P
-        self.J = (J_gtg+J_bat+J_u+J_s_P)*self.probability
+        self.J_bat = -self.opt['param']['k_bat']*SOC
+        self.J_u = self.u.T@self.opt['param']['R_input']@self.u
+        self.J_s_P = (self.opt['param']['r_s_P']*self.s_P/(self.ohps.P_wtg_max+self.ohps.P_gtg_max)
+                 *0.95**self.time_index)
+        self.J = (self.J_gtg+self.J_bat+self.J_u+self.J_s_P)*self.probability
+        
         
 

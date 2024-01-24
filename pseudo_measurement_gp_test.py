@@ -16,7 +16,7 @@ plt.ion()
 dt_pred = 5
 steps = 60
 std_list = (-1,0,1)
-dP_min = 2000
+dP_min = 1000
 tree_depth = 30
 
 gp_opt = get_gp_opt(dt_pred=dt_pred)

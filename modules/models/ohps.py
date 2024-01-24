@@ -1,6 +1,6 @@
 from .dynamic_model import DynamicModel
 from .battery import get_shepherd_model_LiIon
-from .gtg import get_GAST_model, get_static_GTG
+from .gtg import get_GAST_model, get_static_GTG, get_integrator_GTG
 from .wind_turbine import get_power_curve_model
 
 import casadi as ca
@@ -10,9 +10,14 @@ class OHPS(DynamicModel):
     def __init__(self):
         """combine subsystems into one, trying to make code modular to be able to use different models"""
         # self.gtg = get_GAST_model() # does not make sense for discretization interval of multiple minutes
+        # self.gtg = get_integrator_GTG(60*10)
         self.gtg = get_static_GTG()
-        self.battery = get_shepherd_model_LiIon(N_s=170,N_p = 8000) #~5 MWh
-        self.wind_turbine = get_power_curve_model()
+        self.battery = get_shepherd_model_LiIon(N_s=330,N_p = 4*8000) 
+        #~4*9.5 MWh, 1200 V, 4*6MW (for 5000A max current), ca. 12 ISO 40 containers
+        # N_s=170 for ~5 MWh is not enough to satisfy demand for all scenarios 
+        # at current power rating even with perfect forecast
+        self.n_wind_turbines = 4
+        self.wind_turbine = get_power_curve_model(n_turbines=self.n_wind_turbines)
 
         x = ca.vertcat(self.gtg.state, self.battery.state, self.wind_turbine.state)
         u = ca.vertcat(self.gtg.inputs, self.battery.inputs, self.wind_turbine.inputs)
@@ -46,6 +51,9 @@ class OHPS(DynamicModel):
         self.get_u_gtg = ca.Function('get_u_gtg', [self._u], [self.gtg._u], ['u'], ['u_gtg'])
         self.get_u_bat = ca.Function('get_u_bat', [self._u], [self.battery._u], ['u'], ['u_bat'])
         self.get_u_wtg = ca.Function('get_u_wtg', [self._u], [self.wind_turbine._u], ['u'], ['u_wtg'])
+
+        self.P_gtg_max = self.gtg.P_max
+        self.P_wtg_max = self.wind_turbine.P_max
         
     def get_P_gtg(self, x, u, w):
         x_gtg = self.get_x_gtg(x)

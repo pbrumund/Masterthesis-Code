@@ -10,7 +10,7 @@ from multiprocessing import Pool
 # import utils
 # from fileloading import load_weather_data
 from .data_handling import DataHandler
-from .wind_prediction_gp_gpytorch import WindPredictionGP
+from .gp_timeseries_model import WindPredictionGP
 
 class DirectGP(WindPredictionGP):
     def __init__(self, steps_ahead, opt):

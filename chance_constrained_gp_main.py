@@ -2,6 +2,7 @@ import datetime
 
 import casadi as ca
 import numpy as np
+import matplotlib.pyplot as plt
 
 from modules.mpc import ChanceConstrainedMPC, get_mpc_opt
 from modules.models import OHPS
@@ -12,15 +13,15 @@ from modules.plotting import TimeseriesPlot
 
 ohps = OHPS()
 
-mpc_opt = get_mpc_opt()
+mpc_opt = get_mpc_opt(N=30)
 chance_constrained_mpc = ChanceConstrainedMPC(ohps, mpc_opt)
 chance_constrained_mpc.get_optimization_problem()
 
-gp_opt = get_gp_opt(dt_pred = mpc_opt['dt'], steps_forward = mpc_opt['N'])
+gp_opt = get_gp_opt(dt_pred = mpc_opt['dt'], steps_forward = mpc_opt['N'], verbose = False)
 gp = WindPredictionGP(gp_opt)
 
-t_start = datetime.datetime(2022, 1, 1)
-t_end = datetime.datetime(2022,2,1)
+t_start = datetime.datetime(2022, 7, 1)
+t_end = datetime.datetime(2022,12,31)
 dt = datetime.timedelta(minutes=mpc_opt['dt'])
 n_times = int((t_end-t_start)/dt)
 times = [t_start + i*dt for i in range(n_times)]
@@ -33,30 +34,44 @@ SOC_traj = ca.DM.zeros(n_times)
 data_handler = DataHandler(datetime.datetime(2020,1,1), datetime.datetime(2022,12,31), gp_opt)
 x_k = ohps.x0
 v_last = None
+P_gtg_last = ohps.gtg.bounds['ubu']*0.8
 
 # create plots
 plt_power = TimeseriesPlot('Time', 'Power output', 
-    ['Gas turbine', 'Battery', 'Wind turbine', 'Total power generation', 'Demand'])
-plt_SOC = TimeseriesPlot('Time', 'Battery SOC')
-plt_inputs = TimeseriesPlot('Time', 'Control input', ['Gas turbine power', 'Battery current'])
+    ['Gas turbine', 'Battery', 'Wind turbine', 'Total power generation', 'Demand'],
+    title='Chance constrained MPC, Power output')
+plt_SOC = TimeseriesPlot('Time', 'Battery SOC', title='Chance constrained MPC, Battery SOC')
+plt_inputs = TimeseriesPlot('Time', 'Control input', ['Gas turbine power', 'Battery current'],
+                            title='Chance constrained MPC, control inputs')
 
 for k, t in enumerate(times):
     # get parameters: predicted wind speed, power demand, initial state
-    wind_speeds = [data_handler.get_measurement(t, i) for i in range(chance_constrained_mpc.horizon)] # perfect forecast
-    P_wtg = [ohps.wind_turbine.power_curve_fun(ohps.wind_turbine.scale_wind_speed(w)) for w in wind_speeds]
-    wind_speeds = ca.vertcat(*wind_speeds)
+    # wind_speeds = [data_handler.get_measurement(t, i) for i in range(chance_constrained_mpc.horizon)] # perfect forecast
+    wind_speeds_nwp = [data_handler.get_NWP(t,i) for i in range(chance_constrained_mpc.horizon)]
+    P_wtg = [ohps.n_wind_turbines*ohps.wind_turbine.power_curve_fun(ohps.wind_turbine.scale_wind_speed(w)) 
+             for w in wind_speeds_nwp]
+    # wind_speeds = ca.vertcat(*wind_speeds)
     train = (k==0) or (t.minute==0)
     wind_speeds_gp, var_gp = gp.predict_trajectory(t, chance_constrained_mpc.horizon, train)
     std_gp = np.sqrt(var_gp)
-    P_demand = 1.5*ca.vertcat(*P_wtg)
-    P_demand = 8000*ca.DM.ones(chance_constrained_mpc.horizon)
-    p = chance_constrained_mpc.get_p_fun(x_k, wind_speeds_gp, std_gp, P_demand)
+    P_demand = ca.vertcat(*P_wtg) + 0.8*ohps.gtg.bounds['ubu']
+    p = chance_constrained_mpc.get_p_fun(x_k, P_gtg_last, wind_speeds_gp, std_gp, P_demand)
 
     # get initial guess
     v_init = chance_constrained_mpc.get_initial_guess(p, v_last)
 
     # solve optimization problem
     v_opt = chance_constrained_mpc.solver(v_init, p)
+    # get cost function value for tuning
+    J_opt = chance_constrained_mpc.J_fun(v_opt, p)
+    print(f'Total cost: {J_opt}')
+    print(f'''GTG cost terms: J_gtg: {chance_constrained_mpc.J_gtg_fun(v_opt, p)}, 
+          J_gtg_P: {chance_constrained_mpc.J_gtg_P_fun(v_opt, p)}, 
+          J_gtg_eta: {chance_constrained_mpc.J_gtg_eta_fun(v_opt, p)}, 
+          J_gtg_dP: {chance_constrained_mpc.J_gtg_dP_fun(v_opt, p)}''')
+    print(f'Battery cost term: {chance_constrained_mpc.J_bat_fun(v_opt, p)}')
+    print(f'Slip variables: {chance_constrained_mpc.J_s_P_fun(v_opt, p)}')
+    print(f'Control variables: {chance_constrained_mpc.J_u_fun(v_opt, p)}')
 
     u_opt = chance_constrained_mpc.get_u_from_v_fun(v_opt)
     u_k = u_opt[0,:]
@@ -85,9 +100,9 @@ for k, t in enumerate(times):
 
     # save last solution for next iteration
     v_last = v_opt
-    
+    P_gtg_last = P_gtg
     # TODO: for simulation: maybe use smaller time scale and vary wind speed for each subinterval 
     # as wind power is not simply a function of the mean wind speed, 
     # possibly account for this uncertainty in gp
-
+    plt.pause(0.5)
 pass

@@ -15,7 +15,8 @@ class WindTurbine(DynamicModel):
         return wind_speed*(self.hub_height/prediction_height)**alpha
 
 class StaticWindTurbine(WindTurbine):
-    def __init__(self, power_curve_fun, inverse_power_curve_fun = None, hub_height = 100):
+    def __init__(self, power_curve_fun, inverse_power_curve_fun = None, hub_height = 100, 
+                 n_turbines = 1):
         x = ca.SX.sym('x', 0)
         u = ca.SX.sym('u', 0)
         p = {}
@@ -29,9 +30,10 @@ class StaticWindTurbine(WindTurbine):
             raise NotImplementedError('please provide function to invert power curve')
         self.inverse_power_curve = inverse_power_curve_fun      
         self.hub_height = hub_height    # for scaling wind speed
+        self.n_turbines = n_turbines
     def get_power_output(self, x, u, w):
         wind_speed_scaled = self.scale_wind_speed(w)
-        return self.power_curve_fun(wind_speed_scaled)
+        return self.power_curve_fun(wind_speed_scaled)*self.n_turbines
     
 
     
@@ -43,7 +45,7 @@ def get_simple_power_curve_model():
     wind_turbine = StaticWindTurbine(power_curve)
     return wind_turbine
 
-def get_power_curve_model():
+def get_power_curve_model(n_turbines=1):
     power_curve_data = np.loadtxt('modules/models/power_curve.csv', delimiter=',')
     wind_speeds = power_curve_data[:,0]
     power_outputs = power_curve_data[:,1]
@@ -63,9 +65,11 @@ def get_power_curve_model():
     power_outputs_unique = power_outputs[i_start:i_end]
     inverse_power_curve = ca.interpolant(
         'inverse_power_curve', 'bspline', [power_outputs_unique], wind_speeds_unique
-    )
-    wind_turbine = StaticWindTurbine(power_curve, inverse_power_curve, hub_height=110)
+    ) # needs scaling
+    wind_turbine = StaticWindTurbine(power_curve, inverse_power_curve, hub_height=110, 
+                                     n_turbines=n_turbines)
     wind_turbine.cut_out_speed = np.max(wind_speeds)
+    wind_turbine.P_max = P_max
     return wind_turbine
 
 
