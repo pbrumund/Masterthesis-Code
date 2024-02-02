@@ -13,18 +13,30 @@ from modules.mpc_scoring import DataSaving
 
 ohps = OHPS()
 
-mpc_opt = get_mpc_opt()
+mpc_opt = get_mpc_opt(N=30)
+t_start = datetime.datetime(2022,1,1)
+t_end = datetime.datetime(2022,12,31)
+mpc_opt['t_start'] = t_start
+mpc_opt['t_end'] = t_end
+# mpc_opt['param']['k_gtg_P'] = 10
+# mpc_opt['param']['k_gtg_eta'] = 50
+# mpc_opt['param']['k_gtg_dP'] = 5
+# mpc_opt['param']['k_gtg_fuel'] = 0
+# mpc_opt['param']['k_bat'] = .5
+# mpc_opt['param']['R_input'] = ca.diag([0,1e-6])
 nominal_mpc = NominalMPC(ohps, mpc_opt)
+
 nominal_mpc.get_optimization_problem()
 
 gp_opt = get_gp_opt(dt_pred = mpc_opt['dt'])
 # gp = WindPredictionGP(gp_opt)
 
-t_start = datetime.datetime(2022, 1, 1)
-t_end = datetime.datetime(2022,12,31)
+
+
 dt = datetime.timedelta(minutes=mpc_opt['dt'])
 n_times = int((t_end-t_start)/dt)
 times = [t_start + i*dt for i in range(n_times)]
+times_plot = times
 
 x_traj = ca.DM.zeros(n_times, nominal_mpc.nx)
 u_traj = ca.DM.zeros(n_times, nominal_mpc.nu)
@@ -37,27 +49,47 @@ P_gtg_last = ohps.gtg.bounds['ubu']
 v_last = None
 P_demand_last = None
 
-# create plots
-plt_power = TimeseriesPlot('Time', 'Power output',
-    ['Gas turbine', 'Battery', 'Wind turbine', 'Total power generation', 'Demand'],
-    title = 'Nominal MPC with perfect forecast, Power output')
-plt_SOC = TimeseriesPlot('Time', 'Battery SOC', title = 'Nominal MPC with perfect forecast, Battery SOC')
-plt_inputs = TimeseriesPlot('Time', 'Control input', ['Gas turbine power', 'Battery current'],
-                            title = 'Nominal MPC with perfect forecast, Control inputs')
+# # create plots
+# plt_power = TimeseriesPlot('Time', 'Power output',
+#     ['Gas turbine', 'Battery', 'Wind turbine', 'Total power generation', 'Demand'],
+#     title = 'Nominal MPC with perfect forecast, Power output')
+# plt_SOC = TimeseriesPlot('Time', 'Battery SOC', title = 'Nominal MPC with perfect forecast, Battery SOC')
+# plt_inputs = TimeseriesPlot('Time', 'Control input', ['Gas turbine power', 'Battery current'],
+#                             title = 'Nominal MPC with perfect forecast, Control inputs')
 # save trajectories to file
 dims = {'Power output': 4, 'Power demand': 1, 'SOC': 1, 'Inputs': 2}
 data_saver = DataSaving('nominal_mpc_perfect_forecast', mpc_opt, gp_opt, dims)
 
-for k, t in enumerate(times):
+# load trajectories if possible
+start = 0
+values, times_load = data_saver.load_trajectories()
+if values is not None:
+    P_out = values['Power output']
+    P_demand = values['Power demand']
+    P = ca.horzcat(P_out, P_demand)
+    SOC_bat = values['SOC']
+    inputs = values['Inputs']
+    n_vals = P.shape[0]
+    x = 1-SOC_bat
+    t_last = datetime.datetime.strptime(times_load[-1][0]+times_load[-1][1], '%Y-%m-%d%H:%M:%S')
+    times = [t for t in times if t > t_last]
+    start = n_vals
+    SOC_traj[:n_vals,:] = SOC_bat
+    x_traj[:n_vals,:] = x
+    u_traj[:n_vals,:] = inputs
+    P_traj[:n_vals,:] = P
+    x_k = x[-1]
+
+for k, t in enumerate(times, start=start):
     # get parameters: predicted wind speed, power demand, initial state
     wind_speeds = [data_handler.get_measurement(t, i) for i in range(nominal_mpc.horizon)] # perfect forecast
     wind_speeds_nwp = [data_handler.get_NWP(t, i) for i in range(nominal_mpc.horizon)]
     P_wtg = [4*ohps.wind_turbine.power_curve_fun(ohps.wind_turbine.scale_wind_speed(w)) for w in wind_speeds_nwp]
     wind_speeds = ca.vertcat(*wind_speeds)
     if P_demand_last is not None:
-        P_demand = ca.vertcat(P_demand_last[1:], P_wtg[-1] + 0.8*ohps.P_gtg_max)
+        P_demand = ca.vertcat(P_demand_last[1:], P_wtg[-1] + 0.5*ohps.P_gtg_max)
     else:
-        P_demand = ca.vertcat(*P_wtg) + 0.8*ohps.gtg.bounds['ubu']
+        P_demand = ca.vertcat(*P_wtg) + 0.5*ohps.gtg.bounds['ubu']
     # P_demand = 8000*ca.DM.ones(nominal_mpc.horizon)
     p = nominal_mpc.get_p_fun(x_k, P_gtg_last, wind_speeds, P_demand)
 
@@ -93,9 +125,9 @@ for k, t in enumerate(times):
     P_traj[k,:] = ca.vertcat(P_gtg, P_bat, P_wtg, P_total, P_demand[0])
     SOC_traj[k] = ohps.get_SOC_bat(x_k, u_k, w_k)
 
-    plt_inputs.plot(times[:k], u_traj[:k,:])
-    plt_power.plot(times[:k], P_traj[:k,:])
-    plt_SOC.plot(times[:k], SOC_traj[:k])
+    # plt_inputs.plot(times_plot[:k], u_traj[:k,:])
+    # plt_power.plot(times_plot[:k], P_traj[:k,:])
+    # plt_SOC.plot(times_plot[:k], SOC_traj[:k])
 
     # save data
     data_save = {'Power output': P_k, 'Power demand': P_demand[0], 'SOC': SOC_traj[k],

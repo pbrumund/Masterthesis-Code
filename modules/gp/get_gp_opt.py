@@ -23,6 +23,8 @@ def get_gp_opt(**kwargs):
            'dt_meas': 10,
            'dt_pred': 10,
            'direct_model_order': 3,
+           'iterative_model_order': 5,
+           'n_samples_mc': 100
            }
     opt.update(kwargs)
     return opt

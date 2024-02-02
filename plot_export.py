@@ -326,8 +326,9 @@ plt.savefig('../Abbildungen/hist_distribution.pgf', bbox_inches='tight')
 # scoring
 from modules.gp.fileloading import load_weather_data
 from modules.gp import get_gp_opt
-from modules.gp.scoring import (get_interval_score, get_mae, get_posterior_trajectories, get_rmse, get_RE,
-    get_trajectory_gp_prior, get_trajectory_measured, get_trajectory_nwp, get_direct_model_trajectories)
+from modules.gp.scoring import (get_interval_score, get_mae, get_posterior_trajectories, get_rmse, 
+    get_RE, get_trajectory_gp_prior, get_trajectory_measured, get_trajectory_nwp, 
+    get_direct_model_trajectories, get_simple_timeseries_traj)
 
 opt = get_gp_opt(n_z=200, max_epochs_second_training=10, epochs_timeseries_retrain=500, 
                     epochs_timeseries_first_train=500)
@@ -344,8 +345,8 @@ except:
     trajectory_nwp = get_trajectory_nwp(weather_data, opt)
     np.savetxt('modules/gp/scoring/trajectory_nwp.csv', trajectory_nwp)
 try:
-    trajectory_gp_prior = np.loadtxt('modules/gp/scoring/trajectory_gp_prior.csv')
-    var_gp_prior = np.loadtxt('modules/gp/scoring/var_gp_prior.csv')
+    trajectory_gp_prior = np.loadtxt('modules/gp/scoring/trajectory_gp_prior_heteroscedastic_200.csv')
+    var_gp_prior = np.loadtxt('modules/gp/scoring/var_gp_prior_heteroscedastic_200.csv')
 except:
     trajectory_gp_prior, var_gp_prior = get_trajectory_gp_prior(weather_data, opt)
     np.savetxt('modules/gp/scoring/trajectory_gp_prior.csv', trajectory_gp_prior)
@@ -380,11 +381,11 @@ ax.set_ylabel('Interval score')
 ax.grid()
 ax = axs[2]
 ax.plot(1-alpha_vec, percent_in_interval_gp_prior)
-ax.plot(alpha_vec, alpha_vec, '--')
+ax.plot(alpha_vec, alpha_vec, '--', color='tab:gray', alpha=0.75, lw=0.5)
 ax.set_xlabel(r'1-$\alpha$')
 ax.set_ylabel(r'Actual proportion in 1-$\alpha$-interval')
 ax.grid()
-fig.set_size_inches(12*cm, 7*cm)
+fig.set_size_inches(15*cm, 7*cm)
 plt.savefig('../Abbildungen/nwp_gp_scoring.pgf', bbox_inches='tight')
 
 
@@ -445,7 +446,7 @@ for i in range(opt['steps_forward']):
     mae_direct[i] = get_mae(trajectory_measured[i:n_points+i], trajectory_direct)
     re_direct[i] = get_RE(alpha, trajectory_measured[i:n_points+i], trajectory_direct, var_direct)
     score_direct[i] = get_interval_score(alpha, trajectory_measured[i:n_points+i], trajectory_direct, var_direct)
-hours = np.arange(0,len(rmse_direct)/6, 1/6)
+hours = np.arange(0,len(rmse_direct)/6, 1/6)+1/6
 fig, axs = plt.subplots(2,2,layout='constrained', sharex=True)
 ax = axs[0,0]
 ax.plot(hours, rmse_post, label='Time series model')
@@ -476,7 +477,54 @@ fig.legend(handles, labels, loc='upper center', ncol=2, bbox_to_anchor=(.5,1.1))
 fig.set_size_inches(12*cm, 10*cm)
 plt.savefig('../Abbildungen/timeseries_vs_direct.pgf', bbox_inches='tight')
 
+"""Time series with GP prior vs simple time series"""
+steps_forward = opt['steps_forward']
+rmse_simple = np.zeros(steps_forward-1)
+mae_simple = np.zeros(steps_forward-1)
+re_simple = np.zeros(steps_forward-1)
+score_simple = np.zeros(steps_forward-1)
 
+trajectories_mean_simple, trajectories_var_simple = get_simple_timeseries_traj(opt)
+
+alpha = 0.1
+for i in range(opt['steps_forward']-1):
+    trajectory_simple = trajectories_mean_simple[:,i+1]
+    var_simple = trajectories_var_simple[:,i+1]
+    n_points = len(trajectory_simple)
+    rmse_simple[i] = get_rmse(trajectory_measured[i:n_points+i], trajectory_simple)
+    mae_simple[i] = get_mae(trajectory_measured[i:n_points+i], trajectory_simple)
+    re_simple[i] = get_RE(alpha, trajectory_measured[i:n_points+i], trajectory_simple, var_simple)
+    score_simple[i] = get_interval_score(alpha, trajectory_measured[i:n_points+i], trajectory_simple, var_simple)
+
+fig, axs = plt.subplots(2,2,layout='constrained', sharex=True)
+ax = axs[0,0]
+ax.plot(hours[:-1], rmse_post[:-1], label='GP Prior')
+ax.plot(hours[:-1], rmse_simple, label='Simple prior')
+# ax.set_xlabel('Time predicted ahead (h)')
+ax.set_ylabel('RMSE')
+ax.grid()
+ax = axs[0,1]
+ax.plot(hours[:-1], mae_post[:-1], label='GP Prior')
+ax.plot(hours[:-1], mae_simple, label='Simple prior')
+# ax.set_xlabel('Time predicted ahead (h)')
+ax.set_ylabel('MAE')
+ax.grid()
+ax = axs[1,0]
+ax.plot(hours[:-1], score_post[:-1], label='GP Prior')
+ax.plot(hours[:-1], score_simple, label='Simple prior')
+ax.set_xlabel('Time predicted ahead (h)')
+ax.set_ylabel('Interval score')
+ax.grid()
+ax = axs[1,1]
+ax.plot(hours[:-1], re_post[:-1], label='GP Prior')
+ax.plot(hours[:-1], re_simple, label='Simple prior')
+ax.set_xlabel('Time predicted ahead (h)')
+ax.set_ylabel('Reliability evaluation')
+ax.grid()
+handles, labels = ax.get_legend_handles_labels()
+fig.legend(handles, labels, loc='upper center', ncol=2, bbox_to_anchor=(.5,1.1))
+fig.set_size_inches(12*cm, 10*cm)
+plt.savefig('../Abbildungen/timeseries_gp_vs_simple.pgf', bbox_inches='tight')
 """Power curve"""
 # from modules.models.ohps import OHPS
 # ohps = OHPS()

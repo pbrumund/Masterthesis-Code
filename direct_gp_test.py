@@ -6,12 +6,12 @@ import matplotlib.pyplot as plt
 import numpy as np
 
 if __name__ == "__main__":
-    from modules.gp import DirectGPEnsemble, get_gp_opt, TimeseriesModel
+    from modules.gp import DirectGPEnsemble, get_gp_opt, TimeseriesModel, IterativeGPModel
     gp_opt = get_gp_opt(dt_pred=10, verbose=True)
     timeseries_gp = TimeseriesModel(gp_opt)
     gp_opt = get_gp_opt(dt_pred=10, verbose=True)
     direct_gp = DirectGPEnsemble(gp_opt)
-
+    iterative_gp = IterativeGPModel(gp_opt)
     # t_list = [
     #     datetime.datetime(2022,2,15),
     #     datetime.datetime(2022,5,1,12),
@@ -37,6 +37,10 @@ if __name__ == "__main__":
         stop = time.perf_counter()
         print(f'Time for direct model: {(stop-start): .3f} seconds')
         start = time.perf_counter()
+        means_iterative, vars_iterative = iterative_gp.predict_trajectory(t, steps)
+        stop = time.perf_counter()
+        print(f'Time for iterative model: {(stop-start): .3f} seconds')
+        start = time.perf_counter()
         means_timeseries, vars_timeseries = timeseries_gp.predict_trajectory(start_time=t, steps=steps, train=True)
         stop = time.perf_counter()
         print(f'Time for timeseries model with training: {(stop-start): .3f} seconds')
@@ -56,19 +60,25 @@ if __name__ == "__main__":
                         means_direct + 2*np.sqrt(vars_direct), alpha=0.2, color='tab:blue')
         ax.fill_between(times, means_direct - 1*np.sqrt(vars_direct), 
                         means_direct + 1*np.sqrt(vars_direct), alpha=0.4, color='tab:blue')
+        plot_iterative, = ax.plot(times, means_iterative, color='tab:purple')
+        ax.fill_between(times, means_iterative - 2*np.sqrt(vars_iterative), 
+                        means_iterative + 2*np.sqrt(vars_iterative), alpha=0.2, color='tab:purple')
+        ax.fill_between(times, means_iterative - 1*np.sqrt(vars_iterative), 
+                        means_iterative + 1*np.sqrt(vars_iterative), alpha=0.4, color='tab:purple')
         plot_timeseries, = ax.plot(times, means_timeseries, color='tab:orange')
         ax.fill_between(times, means_timeseries - 2*np.sqrt(vars_timeseries), 
                         means_timeseries + 2*np.sqrt(vars_timeseries), alpha=0.2, color='tab:orange')
         ax.fill_between(times, means_timeseries - 1*np.sqrt(vars_timeseries), 
                         means_timeseries + 1*np.sqrt(vars_timeseries), alpha=0.4, color='tab:orange')
+
         plot_measurement, = ax.plot(times, [direct_gp.data_handler.get_measurement(t_i, 0)
                                            for t_i in times], color='tab:green')
         plot_nwp, = ax.plot(times, [direct_gp.data_handler.get_NWP(t, steps)
                                            for steps in range(steps)], color='tab:red')
         ax.set_xlabel('Time')
         ax.set_ylabel('Wind speed in m/s')
-        ax.legend([plot_direct, plot_timeseries, plot_measurement, plot_nwp], 
-                   ['Direct GP', 'Timeseries GP', 'Measurement', 'NWP wind prediction'])
+        ax.legend([plot_direct, plot_iterative, plot_timeseries, plot_measurement, plot_nwp], 
+            ['Direct GP Model', 'Iterative GP Model', 'Time series GP Model', 'Measurement', 'NWP wind prediction'])
         plt.show()
         plt.pause(0.5)
     pass

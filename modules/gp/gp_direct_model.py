@@ -47,7 +47,7 @@ class DirectGP(WindPredictionGP):
     def get_gp_model(self, X_train=None, y_train=None):
         """
         Get a heteroscedastic SVGP model to predict the prediction error/residuals 
-        and uncertainty based on NWP values
+        and uncertainty based on NWP values and recent measurements
         see https://gpflow.github.io/GPflow/develop/notebooks/advanced/heteroskedastic.html
         """
         try:

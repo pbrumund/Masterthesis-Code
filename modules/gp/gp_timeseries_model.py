@@ -116,31 +116,37 @@ class TimeseriesModel(WindPredictionGP):
         likelihood = gpf.likelihoods.HeteroskedasticTFPConditional(
             scale_transform=tfp.bijectors.Exp())
         
+        # kernels_nwp_mean = gpf.kernels.SquaredExponential(
+        #     lengthscales=[1]*(n_inputs-2), active_dims=[i for i in range(n_inputs-2)])
+        # kernels_nwp_var = gpf.kernels.SquaredExponential(
+        #     lengthscales=[1]*(n_inputs-2), active_dims=[i for i in range(n_inputs-2)])
         kernels_nwp_mean = gpf.kernels.Sum([
             gpf.kernels.RationalQuadratic(lengthscales=[1], active_dims=[i]) for i in range(n_inputs-1)
         ])
         kernels_nwp_var = gpf.kernels.Sum([
-            gpf.kernels.RationalQuadratic(lengthscales=[.3], active_dims=[i]) for i in range(n_inputs-1)
+            gpf.kernels.RationalQuadratic(lengthscales=[1], active_dims=[i]) for i in range(n_inputs-1)
         ])
 
 
         kernel_mean = (
             kernels_nwp_mean
+            # + gpf.kernels.SquaredExponential(active_dims=[n_inputs-2])
             + gpf.kernels.Periodic(
                 gpf.kernels.SquaredExponential(active_dims=[n_inputs-1]), period=365) 
             # + gpf.kernels.Periodic(
             #     gpf.kernels.SquaredExponential(active_dims=[n_inputs-1]), period=1)
             )
-        gpf.set_trainable(kernel_mean.submodules[6+1].period, False)
+        gpf.set_trainable(kernel_mean.submodules[7].period, False)
         # gpf.set_trainable(kernel_mean.submodules[7+1].period, False)
         kernel_var = (
             kernels_nwp_var
+            # + gpf.kernels.SquaredExponential(active_dims=[n_inputs-2])
             + gpf.kernels.Periodic(
                 gpf.kernels.SquaredExponential(active_dims=[n_inputs-1]), period=365) 
             # + gpf.kernels.Periodic(
             #     gpf.kernels.SquaredExponential(active_dims=[n_inputs-1]), period=1)
                 )
-        gpf.set_trainable(kernel_var.submodules[6+1].period, False)
+        gpf.set_trainable(kernel_var.submodules[7].period, False)
         # gpf.set_trainable(kernel_var.submodules[7+1].period, False)
         kernel = gpf.kernels.SeparateIndependent(
             [
@@ -171,6 +177,9 @@ class TimeseriesModel(WindPredictionGP):
             num_latent_gps=likelihood.latent_dim,
             mean_function=mean,
             )
+        # Homoscedastic model for comparison
+        # gp_prior = gpf.models.SVGP(kernel=kernel_mean, likelihood=gpf.likelihoods.Gaussian(),
+        #     inducing_variable=Z1, mean_function=gpf.functions.Constant(np.zeros(1)))
         return gp_prior, False
         
     def get_training_step(self, X_train, y_train):
@@ -223,7 +232,7 @@ class TimeseriesModel(WindPredictionGP):
             max_epochs = self.opt['epochs_first_training']
             loss_lb = self.opt['loss_lb']
             
-            for i in range(max_epochs+1):
+            for i in range(max_epochs):
                 try:
                     training_step()
                 except:
@@ -416,7 +425,7 @@ class TimeseriesModel(WindPredictionGP):
                 self.t_last_train = start_time_gp
                 self.gp_timeseries, self.timeseries_likelihood = self.get_timeseries_gp(
                     prediction_time=start_time_gp)
-                # self.reset_timeseries_gp_hyperparameters()
+                self.reset_timeseries_gp_hyperparameters()
                 self.train_timeseries_gp()
             else:
                 self.gp_timeseries, self.timeseries_likelihood = self.get_timeseries_gp(

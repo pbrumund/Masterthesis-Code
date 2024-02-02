@@ -8,6 +8,17 @@ import numpy as np
 import tensorflow as tf
 from gpytorch.priors import Prior
 
+class SimpleTimeseriesGP(gpytorch.models.ExactGP):
+    def __init__(self, train_inputs, train_targets, likelihood):
+        super().__init__(train_inputs, train_targets, likelihood)
+        self.mean_module = gpytorch.means.ConstantMean()
+        self.covar_module = gpytorch.kernels.ScaleKernel(gpytorch.kernels.MaternKernel(nu=0.5))
+
+    def forward(self, x):
+        mean_x = self.mean_module(x)
+        cov_x = self.covar_module(x)
+        return gpytorch.distributions.MultivariateNormal(mean_x, cov_x)
+
 class TimeseriesGP(gpytorch.models.ExactGP):
     def __init__(self, train_inputs, train_targets, likelihood, nwp_gp, get_x_fun, 
                  cashing=True, gp_predictions = None):

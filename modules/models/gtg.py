@@ -52,6 +52,9 @@ def get_static_GTG():
     gtg.set_bounds(lbx=ca.DM.zeros(0), ubx=ca.DM.ones(0), lbu=ca.DM(0), ubu=ca.DM(P_gtg_max))
     gtg.x0 = ca.DM.zeros(0)
     gtg.P_max = P_gtg_max
+    load = ca.SX.sym('load')
+    eta = -0.322*load**2+0.828*load+1e-6 # -0.187*load**2+0.406*load+0.263
+    gtg.eta_fun = ca.Function('eta_gtg', [load], [eta])
     return gtg
 
 def get_integrator_GTG(dt):

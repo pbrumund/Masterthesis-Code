@@ -2,13 +2,15 @@ import numpy as np
 import matplotlib.pyplot as plt
 
 if __name__ == '__main__':
+    """Get scores """
     from modules.gp.fileloading import load_weather_data
     from modules.gp import get_gp_opt
-    from modules.gp.scoring import (get_interval_score, get_mae, get_posterior_trajectories, get_rmse, get_RE,
-        get_trajectory_gp_prior, get_trajectory_measured, get_trajectory_nwp, get_direct_model_trajectories)
+    from modules.gp.scoring import (get_interval_score, get_mae, get_posterior_trajectories, 
+        get_rmse, get_RE, get_trajectory_gp_prior, get_trajectory_measured, get_trajectory_nwp, 
+        get_direct_model_trajectories, get_simple_timeseries_traj, get_mape)
 
-    opt = get_gp_opt(n_z=200, max_epochs_second_training=10, epochs_timeseries_retrain=500, 
-                        epochs_timeseries_first_train=500)
+    opt = get_gp_opt(n_z=200, max_epochs_second_training=20, epochs_timeseries_retrain=500, 
+                        epochs_timeseries_first_train=500, n_last=36)
     weather_data = load_weather_data(opt['t_start'], opt['t_end'])
 
     try:
@@ -22,12 +24,12 @@ if __name__ == '__main__':
         trajectory_nwp = get_trajectory_nwp(weather_data, opt)
         np.savetxt('modules/gp/scoring/trajectory_nwp.csv', trajectory_nwp)
     try:
-        trajectory_gp_prior = np.loadtxt('modules/gp/scoring/trajectory_gp_prior.csv')
-        var_gp_prior = np.loadtxt('modules/gp/scoring/var_gp_prior.csv')
+        trajectory_gp_prior = np.loadtxt('modules/gp/scoring/trajectory_gp_prior_heteroscedastic_200.csv')
+        var_gp_prior = np.loadtxt('modules/gp/scoring/var_gp_prior_heteroscedastic_200.csv')
     except:
         trajectory_gp_prior, var_gp_prior = get_trajectory_gp_prior(weather_data, opt)
-        np.savetxt('modules/gp/scoring/trajectory_gp_prior.csv', trajectory_gp_prior)
-        np.savetxt('modules/gp/scoring/var_gp_prior.csv', var_gp_prior)
+        np.savetxt('modules/gp/scoring/trajectory_gp_prior_heteroscedastic_200.csv', trajectory_gp_prior)
+        np.savetxt('modules/gp/scoring/var_gp_prior_heteroscedastic.csv_200', var_gp_prior)
     rmse_nwp = get_rmse(trajectory_measured, trajectory_nwp)
     mae_nwp = get_mae(trajectory_measured, trajectory_nwp)
 
@@ -40,10 +42,12 @@ if __name__ == '__main__':
     int_score_gp_prior = [get_interval_score(alpha, trajectory_measured, trajectory_gp_prior, var_gp_prior)
                     for alpha in alpha_vec]
 
-    percent_in_interval_gp_prior = np.array(re_gp_prior) + (1-alpha_vec)    
+    percent_in_interval_gp_prior = np.array(re_gp_prior) + (1-alpha_vec) 
+    mape_gp_prior = get_mape(trajectory_measured, trajectory_gp_prior)
 
     print(f'RMSE of NWP: {rmse_nwp}, MAE of NWP: {mae_nwp}')
     print(f'RMSE of GP: {rmse_gp_prior}, MAE of GP: {mae_gp_prior}')
+    print()
 
     plt.figure()
     plt.plot(np.linspace(0.01,1,100), re_gp_prior)
@@ -67,6 +71,7 @@ if __name__ == '__main__':
     score_post = np.zeros(steps_forward)
 
     trajectories_mean_post, trajectories_var_post = get_posterior_trajectories(opt)
+    trajectories_mean_post_simple, trajectories_var_post_simple = get_simple_timeseries_traj(opt)
     # trajectories_mean_post = np.loadtxt('gp/scoring/trajectories_mean_post.csv')
     # trajectories_var_post = np.loadtxt('gp/scoring/trajectories_var_post.csv')
     # first dimension: time of prediction, second dimension: number of steps forward

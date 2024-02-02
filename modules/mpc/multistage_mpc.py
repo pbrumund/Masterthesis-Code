@@ -15,17 +15,7 @@ class MultistageMPC(MPC):
         self.horizon = opt['N']
         self.sampling_frequency = opt['dt']
         self.opt = opt
-    # TODO: maybe build scenario tree dynamically depending on the size of the uncertainty, 
-    # i.e. branch if the uncertainty exceeds a certain threshold.
-    # This should use the uncertainty of the wind turbine power output since it depends on the
-    # gradient of the power curve, i.e. at high wind speeds above the rated wind speed and below 
-    # the cut-off, the power output is constant so branching would be unnecessary
-    # Maybe use different trees for scenario generation (branching every time) 
-    # and control (branching only when necessary)
-    # Maybe also use prediction intervals for chance constraints 
-    # to use in combination with multi-stage MPC
-    # TODO: maybe class for nodes that generates the necessary symbolics to build tree
-    pass
+
     def generate_scenario(self, start_time, train=False, first_value_known=True):
         certainty_horizon = self.opt['certainty_horizon']   # minimum steps before branching
         robust_horizon = self.opt['robust_horizon'] # maximum step for branching
@@ -33,7 +23,7 @@ class MultistageMPC(MPC):
         branching_interval = self.opt['branching_interval'] # only branch every braching_interval steps
         std_list = self.opt['std_list_multistage'] # number of standard deviations for scenario generation
         norm_factor = sum(norm.pdf(x) for x in std_list) # to keep sum of probabilities at 1
-        dP_min = self.opt['dP_min'] # minimum wind power difference at +-1 std for branching
+        dE_min = self.opt['dE_min'] # minimum wind power difference at +-1 std for branching
 
         mean_init, var_init = self.gp.predict_trajectory(start_time, self.horizon, train)
 
@@ -51,6 +41,8 @@ class MultistageMPC(MPC):
 
         pseudo_times_i = [np.array([])]  # to keep pseudo measurement times and vectors
         pseudo_measurements_i = [np.array([])]
+
+        power_uncertainty_acc = [[0]]
         for i in range(self.horizon):
             means_list.append([mean[i] for mean in means_i])
             vars_list.append([var[i] for var in vars_i])
@@ -61,6 +53,13 @@ class MultistageMPC(MPC):
                 for var_traj in vars_i: vars_par.append(var_traj[i])
                 parent_nodes.append([k for k, _ in enumerate(parent_nodes[i])])
                 probabilities.append(probabilities[i])
+                P_lower = [self.ohps.get_P_wtg(0,0,mean[i]+std_list[0]+var[i]) 
+                                               for mean, var in zip(means_i, vars_i)]
+                P_upper = [self.ohps.get_P_wtg(0,0,mean[i]+std_list[2]+var[i]) 
+                                               for mean, var in zip(means_i, vars_i)]
+                power_uncertainties_acc_next = [power_uncertainty_acc_i_k+np.abs(P_upper[k]-P_lower[k])
+                    for k, power_uncertainty_acc_i_k in enumerate(power_uncertainty_acc[i])]
+                power_uncertainty_acc.append(power_uncertainties_acc_next)
                 continue
             pseudo_times_next = []  # values for next iteration
             pseudo_measurements_next = []
@@ -68,6 +67,7 @@ class MultistageMPC(MPC):
             vars_i_next = []
             parent_nodes_next = []
             probabilities_next = []
+            power_uncertainties_acc_next = []
             for k, (mean, var, pseudo_times, pseudo_measurements) in enumerate(zip(
                     means_i, vars_i, pseudo_times_i, pseudo_measurements_i)):
                 means_par.append(mean[i]) # keep mean/variance of current scenario even if branching
@@ -77,7 +77,7 @@ class MultistageMPC(MPC):
                     self.ohps.wind_turbine.scale_wind_speed(mean[i]+np.sqrt(var[i])))
                 P_lower = self.ohps.n_wind_turbines*self.ohps.wind_turbine.power_curve_fun(
                     self.ohps.wind_turbine.scale_wind_speed(mean[i]-np.sqrt(var[i])))
-                if np.abs(P_upper-P_lower) < dP_min:
+                if power_uncertainty_acc[i][k]+np.abs(P_upper-P_lower)*self.sampling_frequency/60 < dE_min:
                     # Keep trajectories, do not branch this scenario
                     pseudo_times_next.append(pseudo_times)
                     pseudo_measurements_next.append(pseudo_measurements)
@@ -85,6 +85,8 @@ class MultistageMPC(MPC):
                     vars_i_next.append(var)
                     parent_nodes_next.append(k)
                     probabilities_next.append(probabilities[i][k])
+                    power_uncertainties_acc_next.append(power_uncertainty_acc[i][k]+
+                                                        np.abs(P_upper-P_lower)*self.sampling_frequency/60)
                     continue
                 # add measurement at timestep i
                 pseudo_times_new = np.append(pseudo_times, i)
@@ -102,15 +104,172 @@ class MultistageMPC(MPC):
                     probabilities_next.append(probabilities[i][k]*norm.pdf(x)/norm_factor)
                     means_i_next.append(mean_new)
                     vars_i_next.append(var_new)
+                    power_uncertainties_acc_next.append(0)
             means_i = means_i_next
             vars_i = vars_i_next
             pseudo_measurements_i = pseudo_measurements_next
             pseudo_times_i = pseudo_times_next
             probabilities.append(probabilities_next)
             parent_nodes.append(parent_nodes_next)
+            power_uncertainty_acc.append(power_uncertainties_acc_next)
         # parent_nodes[0] = [None]
         return means_list, vars_list, parent_nodes[:-1], probabilities[:-1]
     
+    def generate_scenario_new(self, start_time, train=False, first_value_known=True):
+        """Use average, best and worst case scenarios but keep track of trajectory with 
+        pseudo-measurements, branch if difference in generated energy gets too large"""
+        certainty_horizon = self.opt['certainty_horizon']   # minimum steps before branching
+        robust_horizon = self.opt['robust_horizon'] # maximum step for branching
+        max_scenarios = self.opt['max_scenarios']   # maximum number of branches
+        branching_interval = self.opt['branching_interval'] # only branch every braching_interval steps
+        std_list = self.opt['std_list_multistage'] # number of standard deviations for scenario generation
+        norm_factor = sum(norm.pdf(x) for x in std_list) # to keep sum of probabilities at 1
+        dE_min = self.opt['dE_min'] # minimum accumulated wind power difference between min and max trajectory for branching
+
+        mean_init, var_init = self.gp.predict_trajectory(start_time, self.horizon, train)
+
+        trajectory_means = [mean_init]
+        trajectory_vars = [var_init]
+
+        control_means = [mean_init]
+        control_vars = [var_init]
+
+        means_list = [[mean_init[0]]]
+        vars_list = [[var_init[0]]] # is not used
+
+        probabilities = [[1]]
+        parent_nodes = [[None]] # keep track of parents for tree construction
+
+        pseudo_measurements = [np.empty((0,len(std_list)))] # to keep pseudo measurement times and vectors
+
+        probabilities_last = [1]
+        power_uncertainty_acc = [0]
+        for i in range(1, self.horizon):
+            means_list_i = []
+            vars_list_i = []
+            probabilities_list_i = []
+            parent_nodes_i = []
+
+            control_means_next = []
+            control_vars_next = []
+            trajectory_means_next = []
+            trajectory_vars_next = []
+
+            power_uncertainty_next = []
+            pseudo_measurements_next = []
+            for k, (mean_gp, var_gp) in enumerate(zip(trajectory_means, trajectory_vars)):
+                # iterate over current gp means (1 if not branched, 3 after first branch etc.)
+                pseudo_measurements_i_k = (
+                    control_means[k][i]+np.array(std_list).reshape((1,-1))*np.sqrt(control_vars[k][i]))
+                # pseudo_measurements[k] = np.concatenate([pseudo_measurements[k], 
+                #     pseudo_measurements_i_k], axis=0)
+                pseudo_measurements_k = np.concatenate([pseudo_measurements[k], 
+                    pseudo_measurements_i_k], axis=0)
+                P_lower = self.ohps.get_P_wtg(0,0,mean_gp[i]+std_list[0]*np.sqrt(var_gp[i]))
+                P_upper = self.ohps.get_P_wtg(0,0,mean_gp[i]+std_list[-1]*np.sqrt(var_gp[i]))
+                power_uncertainty_acc[k] += np.abs(P_upper-P_lower)*self.sampling_frequency/60
+                if power_uncertainty_acc[k] < dE_min or len(control_means) >= max_scenarios:
+                    # do not branch, use control means (keep constant difference)
+                    means_list_i.append(control_means[k][i])
+                    vars_list_i.append(control_vars[k][i])
+                    parent_nodes_i.append(k)
+                    probabilities_list_i.append(probabilities_last[k])
+                    control_means_next.append(control_means[k])
+                    control_vars_next.append(control_vars[k])
+                    trajectory_means_next.append(trajectory_means[k])
+                    trajectory_vars_next.append(trajectory_vars[k])
+                    pseudo_measurements_next.append(pseudo_measurements_k)
+                    power_uncertainty_next.append(power_uncertainty_acc[k])
+                    continue
+                # branch
+                parent_nodes_i.extend([k]*len(std_list))
+                means_list_i.extend(
+                    [mean_gp[i]+x*np.sqrt(var_gp[i]) for x in std_list]
+                )
+                vars_list_i.extend([var_gp[i]]*len(std_list))
+                probability_i_k = probabilities_last[k]
+                probabilities_list_i.extend(
+                    [probability_i_k*norm.pdf(x)/norm_factor for x in std_list]
+                )
+                control_means_next.extend([trajectory_means[k]+x*np.sqrt(trajectory_vars)[k] 
+                                            for x in std_list])
+                control_vars_next.extend([trajectory_vars[k]]*len(std_list))
+                for j in range(pseudo_measurements_k.shape[1]):
+                    pseudo_gp_x = np.arange(1,i+1)
+                    pseudo_gp_y = pseudo_measurements_k[:,j]
+                    pseudo_gp = self.gp.get_pseudo_timeseries_gp(
+                        start_time, pseudo_gp_y, pseudo_gp_x)
+                    pseudo_gp_mean, pseudo_gp_var = self.gp.predict_trajectory(
+                        start_time, self.horizon, pseudo_gp=pseudo_gp
+                    )
+                    trajectory_means_next.append(pseudo_gp_mean)
+                    trajectory_vars_next.append(pseudo_gp_var)
+                pseudo_measurements_next.extend([pseudo_measurements_k]*len(std_list))
+                power_uncertainty_next.extend([0]*len(std_list))
+            control_means = control_means_next
+            control_vars = control_vars_next
+            trajectory_means = trajectory_means_next
+            trajectory_vars = trajectory_vars_next
+            parent_nodes.append(parent_nodes_i)
+            probabilities.append(probabilities_list_i)
+            probabilities_last = probabilities_list_i
+            pseudo_measurements = pseudo_measurements_next
+            power_uncertainty_acc = power_uncertainty_next  
+            means_list.append(means_list_i)
+            vars_list.append(vars_list_i)          
+        return means_list, vars_list, parent_nodes, probabilities
+    
+    def generate_scenario_simple(self, start_time, train=False):
+        """Only branch once using +-a standard deviations as scenarios,
+        adapt certainty horizon based on accumulated power uncertainty"""
+        std_list = self.opt['std_list_multistage'] # number of standard deviations for scenario generation
+        norm_factor = sum(norm.pdf(x) for x in std_list) # to keep sum of probabilities at 1
+        dE_min = self.opt['dE_min'] # minimum wind power difference at +-1 std for branching
+
+        mean_init, var_init = self.gp.predict_trajectory(start_time, self.horizon, train)
+
+        means_list = [[mean_init[0]]]
+        vars_list = [[var_init[0]]] # is not used
+
+        probabilities = [[1]]
+        parent_nodes = [[None]] # keep track of parents for tree construction
+
+        has_branched = False
+
+        power_uncertainty_acc = 0
+        for i in range(1, self.horizon):
+            if has_branched:
+                parent_nodes.append(list(np.arange(len(std_list))))
+                means_list.append(
+                    [mean_init[i]+x*np.sqrt(var_init[i]) for x in std_list]
+                )
+                vars_list.append([var_init[i]]*len(std_list))
+                probabilities.append(
+                    [norm.pdf(x)/norm_factor for x in std_list]
+                )
+                continue
+            P_upper = self.ohps.get_P_wtg(0,0,mean_init[i]+std_list[0]*np.sqrt(var_init[i]))
+            P_lower = self.ohps.get_P_wtg(0,0,mean_init[i]-std_list[0]*np.sqrt(var_init[i]))
+            power_uncertainty_acc += np.abs(P_upper-P_lower)*self.sampling_frequency/60
+            if power_uncertainty_acc >= dE_min:
+                # branch
+                has_branched = True
+                parent_nodes.append([0]*len(std_list))
+                means_list.append(
+                    [mean_init[i]+x*np.sqrt(var_init[i]) for x in std_list]
+                )
+                vars_list.append([var_init[i]]*len(std_list))
+                probabilities.append(
+                    [norm.pdf(x)/norm_factor for x in std_list]
+                )
+                continue
+            # do not branch yet
+            parent_nodes.append([0])
+            means_list.append([mean_init[i]])
+            vars_list.append([var_init[i]])
+            probabilities.append([1])
+        return means_list, vars_list, parent_nodes, probabilities
+
     def build_optimization_tree(self, parent_nodes, probabilities, means=None, vars=None):
         nodes = [
             [TreeNode(ohps=self.ohps, time_index=0, node_index=0, opt=self.opt, predecessor=None,
@@ -125,7 +284,13 @@ class MultistageMPC(MPC):
         return nodes
 
     def get_optimization_problem(self, start_time, train=False):
-        means, vars, parent_nodes, probabilities = self.generate_scenario(start_time, train)
+        if self.opt['use_simple_scenarios']:
+            means, vars, parent_nodes, probabilities = self.generate_scenario_simple(start_time, train)
+        else:
+            means, vars, parent_nodes, probabilities = self.generate_scenario_new(start_time, train)
+        self.means = means
+        self.vars = vars
+        self.parent_nodes = parent_nodes
         nodes = self.build_optimization_tree(parent_nodes, probabilities, means, vars)
         self.nodes = nodes
         # nodes is nested list with time as first index and node index as second index
@@ -349,6 +514,8 @@ class TreeNode:
         self.J_gtg_dP = (self.opt['param']['k_gtg_dP']*
                     ((self.P_gtg-P_gtg_last)/self.ohps.P_gtg_max)**2)
         self.J_gtg = self.J_gtg_P + self.J_gtg_eta + self.J_gtg_dP
+        J_gtg_P_eta = self.opt['param']['k_gtg']*load/self.ohps.gtg.eta_fun(load)
+        self.J_gtg = J_gtg_P_eta + self.J_gtg_dP
         x_bat = self.ohps.get_x_bat(self.x)
         u_bat = self.ohps.get_u_bat(self.u)
         SOC = self.ohps.battery.get_SOC_fun(x_bat, u_bat)

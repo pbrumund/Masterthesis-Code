@@ -17,7 +17,7 @@ class TimeseriesPlot:
         self.ax = plt.axes()
         self.is_setup = True
 
-    def plot(self, x, y):
+    def plot(self, x, y, fill_between=None):
         if not self.is_setup: self.setup_plot()
         self.ax.cla()
         if type(y) in (ca.DM, np.array):
@@ -40,6 +40,9 @@ class TimeseriesPlot:
             else: label = None
             plot = self.ax.plot(x, y_i, label=label)
             plots.append(plot)
+        if fill_between is not None:
+            for f in fill_between:
+                self.ax.fill_between(x, f[0], f[1], alpha=0.5, color='tab:green')
         self.ax.set_xlabel(self.xlabel)
         self.ax.set_ylabel(self.ylabel)
         if self.timeseries_names is not None:

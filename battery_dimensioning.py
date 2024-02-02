@@ -27,18 +27,70 @@ def get_unsatisfied_demand(E_bat_max):
     E_unsatisfied_rel = P_unsatisfied_acc/np.sum(P_demand)
     return E_unsatisfied_rel
 
+def get_unsatisfied_demand_accurate(ohps, P_demand_vec, P_wtg_vec):
+    import casadi as ca
+    ohps.battery.setup_integrator(600)
+    x_0 = 0.5
+    n_vals = len(P_demand_vec)
+    P_unsatisfied = np.zeros(n_vals)
+    P_bat_vec = np.zeros(n_vals)
+    P_gtg_vec = np.zeros(n_vals)
+    x_vec = np.zeros(n_vals)
+    SOC_vec = np.zeros(n_vals)
+    P_gtg = ca.MX.sym('P_gtg')
+    i_bat = ca.MX.sym('P_gtg')
+    P_demand = ca.MX.sym('P_demand')
+    P_wtg = ca.MX.sym('P_wtg')
+    x_bat = ca.MX.sym('x_bat')
+    P_total = P_gtg+P_wtg+ohps.get_P_bat(x_bat, i_bat, 0)
+    x_bat_next = ohps.battery.get_next_state(x_bat, i_bat)
+    SOC_bat_next = ohps.battery.get_SOC_fun(x_bat_next, i_bat)
+    J = 100*(P_demand-P_total)**2 - SOC_bat_next
+    opt_problem = {
+        'x': ca.vertcat(P_gtg, i_bat),
+        'f': J,
+        'g': x_bat_next,
+        'p': ca.vertcat(P_wtg, P_demand, x_bat)
+        }
+    x_lb = ca.vertcat(0, -32000)
+    x_ub = ca.vertcat(32000, 32000)
+    g_lb = 0.1
+    g_ub = 0.9
+    x_init = ca.vertcat(0.8*32000, 0)
+    ipopt_opt = {
+        'print_level': 0
+        }
+    nlp_opt = {'ipopt': ipopt_opt}
+    solver = ca.nlpsol('simple_controller', 'ipopt', opt_problem, nlp_opt)
+
+    x_k = x_0
+    for k in range(n_vals-1):
+        p_k = ca.vertcat(P_wtg_vec[k], P_demand_vec[k], x_k)
+        u_opt = solver(x0=x_init, p=p_k, lbx=x_lb, ubx=x_ub, lbg=g_lb, ubg=g_ub)['x']
+        P_bat_opt = ohps.get_P_bat(x_k, u_opt[1], 0)
+        P_gtg_vec[k] = u_opt[0]
+        P_bat_vec[k] = P_bat_opt
+        P_unsatisfied[k] = np.abs(P_demand_vec[k]-P_wtg_vec[k]-u_opt[0]-P_bat_opt)
+        x_vec[k] = x_k
+        SOC_vec[k] = ohps.battery.get_SOC_fun(x_k, u_opt[1])
+        x_k = ohps.battery.get_next_state(x_k, u_opt[1])
+        print(f'{k}: {SOC_vec[k]}')
+    P_unsatisfied_acc = np.sum(P_unsatisfied) 
+    E_unsatisfied_rel = P_unsatisfied_acc/np.sum(P_demand_vec)
+    return E_unsatisfied_rel, P_gtg_vec, P_bat_vec, SOC_vec
 
 if __name__ == '__main__':
     plt.ion()
     ohps = OHPS()
+    ohps.setup_integrator(600)
     t_start_data = datetime.datetime(2020,1,1)
     t_end_data = datetime.datetime(2022,12,31)
     opt = get_gp_opt()
     data_handler = DataHandler(t_start_data, t_end_data, opt)
     times = data_handler.weather_data['times_meas']
     # Only use data from 2020 and 2021, test on 2022 data
-    t_start = datetime.datetime(2020,1,1)
-    t_end = datetime.datetime(2021,12,31)
+    t_start = datetime.datetime(2022,1,1)
+    t_end = datetime.datetime(2022,12,31)
     times = times[times>t_start]
     times = times[times<t_end]
     # get power demand and actual wind power
@@ -136,6 +188,14 @@ if __name__ == '__main__':
     ax[0].semilogx(E_bat_max/1000, P_unsatisfied*100)
     ax[1].semilogx(E_bat_max/1000, 100-P_unsatisfied/get_unsatisfied_demand(0)*100)
 
-    fig.legend([r'90% base load', r'80% base load', r'70% base load'])
+    reserve_factor = 0.2
+    P_gtg_nom = (1-reserve_factor)*ohps.P_gtg_max
+    P_demand = wind_power_nwp + P_gtg_nom
+
+    P_unsatisfied_sim = get_unsatisfied_demand_accurate(ohps, P_demand, wind_power_actual)
+    ax[0].scatter([30], [P_unsatisfied_sim*100])
+
+    fig.legend([r'90% base load', r'80% base load', r'70% base load', r'Simulation with 80% base load'])
+
     plt.show()
     pass

@@ -28,7 +28,7 @@ class NominalMPC(MPC):
         X_lb = ca.DM.ones(self.horizon)@self.ohps.lbx.T
         X_ub = ca.DM.ones(self.horizon)@self.ohps.ubx.T
         s_P = ca.MX.sym('s_P', self.horizon)    # for soft power constraints
-        s_P_lb = ca.DM.zeros(self.horizon)
+        s_P_lb = -ca.inf*ca.DM.ones(self.horizon)
         s_P_ub = ca.inf*ca.DM.ones(self.horizon)
         
         v = ca.vertcat(U_mat.reshape((-1,1)), X_mat.reshape((-1,1)), s_P)   # Vector for optimization problem
@@ -64,29 +64,32 @@ class NominalMPC(MPC):
 
     def stage_cost(self, state, input, s_P, i, P_gtg_last=None):
         # P_gtg_last = None
-        alpha_1 = self.param['alpha_1']
-        alpha_2 = self.param['alpha_2']
         x_gtg = self.ohps.get_x_gtg(state)
         u_gtg = self.ohps.get_u_gtg(input)
         P_gtg = self.ohps.gtg.get_power_output(x_gtg, u_gtg, None)
         load = P_gtg/self.ohps.P_gtg_max
-        eta_gtg = ca.if_else(load>0.01, alpha_1*load**2 + alpha_2*load, 0)  # TODO: add efficiency to model 
+        eta_gtg = self.ohps.gtg.eta_fun(load)
         eta_max = self.param['eta_gtg_max']
-        J_gtg = self.param['k_gtg_eta']*(eta_gtg-eta_max)**2 + self.param['k_gtg_P']*load
+        J_gtg_P = self.param['k_gtg_P']*load
+        # J_gtg_eta = self.param['k_gtg_eta']*(eta_gtg-eta_max)**2
+        J_gtg_eta = ca.if_else(load<1e-4, 0, self.param['k_gtg_eta']*(eta_gtg-eta_max)**2)
+        J_gtg_fuel = ca.if_else(load<1e-3, 0, self.param['k_gtg_fuel']*load/eta_gtg)
+        J_gtg= J_gtg_P + J_gtg_eta + J_gtg_fuel
+                
         x_bat = self.ohps.get_x_bat(state)
         u_bat = self.ohps.get_u_bat(input)
         SOC = self.ohps.battery.get_SOC_fun(x_bat, u_bat)
         J_bat = -self.param['k_bat']*SOC
         J_u = input.T@self.param['R_input']@input
-        J_s_P = self.param['r_s_P']*s_P/(self.ohps.P_wtg_max+self.ohps.P_gtg_max)*0.95**i
+        J_s_P = self.param['r_s_P']*s_P**2/(self.ohps.P_wtg_max+self.ohps.P_gtg_max)*0.95**i
         # J_gtg_dP = self.param['k_gtg_dP']*ca.log(100*ca.fabs(u_gtg)/self.ohps.gtg.bounds['ubu']+1)
         # J_gtg += J_gtg_dP
         if P_gtg_last is not None:
             J_gtg += self.param['k_gtg_dP']*((P_gtg-P_gtg_last)/self.ohps.P_gtg_max)**2
         # functions for individual terms for tuning parameters
         self.J_gtg_i = J_gtg
-        self.J_gtg_P_i =self.param['k_gtg_P']*load
-        self.J_gtg_eta_i = self.param['k_gtg_eta']*(eta_gtg-eta_max)**2
+        self.J_gtg_P_i = J_gtg_P
+        self.J_gtg_eta_i = J_gtg_eta
         self.J_gtg_dP_i = self.param['k_gtg_dP']*((P_gtg-P_gtg_last)/self.ohps.P_gtg_max)**2
         self.J_bat_i = J_bat
         self.J_u_i = J_u
@@ -181,7 +184,7 @@ class NominalMPC(MPC):
             P_bat = self.ohps.get_P_bat(x_i, u_i, wind_speeds[i])
             P_wtg = self.ohps.get_P_wtg(x_i, u_i, wind_speeds[i])
             g_demand = P_demand[i] - P_gtg - P_bat - P_wtg - s_P[i]
-            g_demand_lb = -ca.inf
+            g_demand_lb = 0
             g_demand_ub = 0
             g.append(g_demand)
             g_lb.append(g_demand_lb)
