@@ -424,7 +424,7 @@ class TreeNode:
         self.x_lb = self.ohps.lbx
         self.x_ub = self.ohps.ubx
         self.s_P = ca.MX.sym(f's_P_{self.time_index}_{self.node_index}')
-        self.s_P_lb = 0
+        self.s_P_lb = -ca.inf
         self.s_P_ub = ca.inf
         self.v = ca.vertcat(self.u, self.x, self.s_P)
         self.v_lb = ca.vertcat(self.u_lb, self.x_lb, self.s_P_lb)
@@ -487,7 +487,7 @@ class TreeNode:
         P_bat = self.ohps.get_P_bat(self.x, self.u, wind_speed)
         P_wtg = self.ohps.get_P_wtg(self.x, self.u, wind_speed)
         g_demand = self.P_demand - P_gtg - P_bat - P_wtg - self.s_P
-        g_demand_lb = -ca.inf
+        g_demand_lb = 0
         g_demand_ub = 0
         self.constraints.append(g_demand)
         g_lb.append(g_demand_lb)
@@ -513,16 +513,15 @@ class TreeNode:
             P_gtg_last = self.predecessor.P_gtg
         self.J_gtg_dP = (self.opt['param']['k_gtg_dP']*
                     ((self.P_gtg-P_gtg_last)/self.ohps.P_gtg_max)**2)
-        self.J_gtg = self.J_gtg_P + self.J_gtg_eta + self.J_gtg_dP
-        J_gtg_P_eta = self.opt['param']['k_gtg']*load/self.ohps.gtg.eta_fun(load)
-        self.J_gtg = J_gtg_P_eta + self.J_gtg_dP
+        J_gtg_fuel = self.opt['param']['k_gtg_fuel']*load/self.ohps.gtg.eta_fun(load)
+        self.J_gtg = self.J_gtg_P + self.J_gtg_eta + self.J_gtg_dP + J_gtg_fuel
         x_bat = self.ohps.get_x_bat(self.x)
         u_bat = self.ohps.get_u_bat(self.u)
         SOC = self.ohps.battery.get_SOC_fun(x_bat, u_bat)
         self.J_bat = -self.opt['param']['k_bat']*SOC
         self.J_u = self.u.T@self.opt['param']['R_input']@self.u
-        self.J_s_P = (self.opt['param']['r_s_P']*self.s_P/(self.ohps.P_wtg_max+self.ohps.P_gtg_max)
-                 *0.95**self.time_index)
+        self.J_s_P = (self.opt['param']['r_s_P']*(self.s_P)**2/(self.ohps.P_wtg_max+self.ohps.P_gtg_max)
+                 *1/(self.time_index+1)**2)
         self.J = (self.J_gtg+self.J_bat+self.J_u+self.J_s_P)*self.probability
         
         

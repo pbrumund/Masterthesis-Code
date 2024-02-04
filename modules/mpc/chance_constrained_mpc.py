@@ -15,6 +15,35 @@ class ChanceConstrainedMPC(NominalMPC):
         epsilon = opt['epsilon_chance_constraint']
         self.back_off_factor = norm.ppf(1-epsilon)  # Phi^-1(1-epsilon)
 
+    def get_optimization_variables(self):
+        """
+        Get optimization variables: Inputs, states, s_P for soft constraint on power
+        Also returns bounds on optimization variables including state constraints
+        """
+        # U_mat = (u_0, u_1, ..., u_N-1)
+        U_mat = ca.MX.sym('U', self.horizon, self.nu)   # system inputs
+        U_lb = ca.DM.ones(self.horizon)@self.ohps.lbu.T
+        U_ub = ca.DM.ones(self.horizon)@self.ohps.ubu.T
+        # X_mat = (x_1, x_2, ..., x_N)
+        X_mat = ca.MX.sym('X', self.horizon, self.nx)   # state trajectory for multiple shooting
+        X_lb = ca.DM.ones(self.horizon)@self.ohps.lbx.T
+        X_ub = ca.DM.ones(self.horizon)@self.ohps.ubx.T
+        s_P = ca.MX.sym('s_P', self.horizon)    # for soft power constraints
+        s_P_lb = ca.DM.zeros(self.horizon)
+        s_P_ub = ca.inf*ca.DM.ones(self.horizon)
+        
+        v = ca.vertcat(U_mat.reshape((-1,1)), X_mat.reshape((-1,1)), s_P)   # Vector for optimization problem
+        
+        self.get_u_from_v_fun = ca.Function('get_u_from_v', [v], [U_mat], ['v'], ['U_mat'])
+        self.get_x_from_v_fun = ca.Function('get_x_from_v', [v], [X_mat], ['v'], ['X_mat'])
+        self.get_s_from_v_fun = ca.Function('get_s_from_v', [v], [s_P], ['v'], ['s_P'])
+        self.get_v_fun = ca.Function('get_v', [U_mat, X_mat, s_P], [v], 
+                                     ['U_mat', 'X_mat', 's_P'], ['v'])
+
+        v_lb = self.get_v_fun(U_lb, X_lb, s_P_lb)
+        v_ub = self.get_v_fun(U_ub, X_ub, s_P_ub)
+        return v, v_lb, v_ub
+    
     def get_optimization_parameters(self):
         """
         get symbolic variables for the parameters of the optimizaton problem:

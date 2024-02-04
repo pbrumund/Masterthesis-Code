@@ -23,7 +23,7 @@ def get_mpc_opt(method='nominal', **kwargs):
         'k_gtg_fuel': 0,
         'k_bat': .5,#.1,#.5,
         'R_input': ca.diag([0,1e-8]),# 5e-6
-        'r_s_P': 10000,
+        'r_s_P': 1000,
         'k_gtg_dP': 5,#5,#.5,
         'k_bat_final': 0#500
     }
@@ -36,7 +36,7 @@ def get_nlp_opt(**kwargs):
     ipopt_opt = {
         'print_frequency_time': 1,
         'print_frequency_iter': 10,
-        'print_level': 1,
+        'print_level': 5,
         'max_iter': 1000,
         'linear_solver': 'ma86',
         # 'tol': 0.0001,

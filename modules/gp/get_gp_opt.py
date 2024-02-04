@@ -8,8 +8,8 @@ def get_gp_opt(**kwargs):
            'n_z': 200,
            'epochs_first_training': 250,
            'max_epochs_second_training': 10,
-           'epochs_timeseries_first_train': 200,
-           'epochs_timeseries_retrain': 50,
+           'epochs_timeseries_first_train': 500,
+           'epochs_timeseries_retrain': 500,
            'loss_lb': 0.5,
            'verbose': True,
            'n_last': 72,   # 12 h
@@ -28,4 +28,4 @@ def get_gp_opt(**kwargs):
            }
     opt.update(kwargs)
     return opt
-    
+    # TODO: 500 epochs

@@ -81,7 +81,7 @@ class NominalMPC(MPC):
         SOC = self.ohps.battery.get_SOC_fun(x_bat, u_bat)
         J_bat = -self.param['k_bat']*SOC
         J_u = input.T@self.param['R_input']@input
-        J_s_P = self.param['r_s_P']*s_P**2/(self.ohps.P_wtg_max+self.ohps.P_gtg_max)*0.95**i
+        J_s_P = self.param['r_s_P']*(s_P**2)/(self.ohps.P_wtg_max+self.ohps.P_gtg_max)/(1+i)**2
         # J_gtg_dP = self.param['k_gtg_dP']*ca.log(100*ca.fabs(u_gtg)/self.ohps.gtg.bounds['ubu']+1)
         # J_gtg += J_gtg_dP
         if P_gtg_last is not None:

@@ -87,9 +87,9 @@ for k, t in enumerate(times, start=start):
     P_wtg = [4*ohps.wind_turbine.power_curve_fun(ohps.wind_turbine.scale_wind_speed(w)) for w in wind_speeds_nwp]
     wind_speeds = ca.vertcat(*wind_speeds)
     if P_demand_last is not None:
-        P_demand = ca.vertcat(P_demand_last[1:], P_wtg[-1] + 0.5*ohps.P_gtg_max)
+        P_demand = ca.vertcat(P_demand_last[1:], P_wtg[-1] + 0.8*ohps.P_gtg_max)
     else:
-        P_demand = ca.vertcat(*P_wtg) + 0.5*ohps.gtg.bounds['ubu']
+        P_demand = ca.vertcat(*P_wtg) + 0.8*ohps.gtg.bounds['ubu']
     # P_demand = 8000*ca.DM.ones(nominal_mpc.horizon)
     p = nominal_mpc.get_p_fun(x_k, P_gtg_last, wind_speeds, P_demand)
 

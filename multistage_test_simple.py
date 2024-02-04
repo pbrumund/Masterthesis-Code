@@ -47,15 +47,15 @@ P_gtg_last = ohps.gtg.bounds['ubu']*0.8
 P_demand_last = None
 
 # create plots
-plt_power = TimeseriesPlot('Time', 'Power output', #
-    ['Gas turbine', 'Battery', 'Wind turbine', 'Total power generation', 'Demand'],
-    title = 'Multi-stage MPC, Power output')
-plt_SOC = TimeseriesPlot('Time', 'Battery SOC', title='Multi-stage MPC, Battery SOC')
-plt_inputs = TimeseriesPlot('Time', 'Control input', ['Gas turbine power', 'Battery current'],
-                            title = 'Multi-stage MPC, control inputs')
+# plt_power = TimeseriesPlot('Time', 'Power output', #
+#     ['Gas turbine', 'Battery', 'Wind turbine', 'Total power generation', 'Demand'],
+#     title = 'Multi-stage MPC, Power output')
+# plt_SOC = TimeseriesPlot('Time', 'Battery SOC', title='Multi-stage MPC, Battery SOC')
+# plt_inputs = TimeseriesPlot('Time', 'Control input', ['Gas turbine power', 'Battery current'],
+#                             title = 'Multi-stage MPC, control inputs')
 # plt_wind_pred = TimeseriesPlot('Time', 'Wind speed (m/s)', title='Multi-stage MPC, wind speed scenarios')
 # plt_wind_P_pred = TimeseriesPlot('Time', 'Power (kW)', title='Multi-stage MPC, wind power scenarios')
-fig_pred, ax_pred = plt.subplots(2, sharex=True, num='Multi-stage MPC, wind predictions')
+# fig_pred, ax_pred = plt.subplots(2, sharex=True, num='Multi-stage MPC, wind predictions')
 # save trajectories to file
 dims = {'Power output': 4, 'Power demand': 1, 'SOC': 1, 'Inputs': 2}
 data_saver = DataSaving('multi-stage_mpc', mpc_opt, gp_opt, dims)
