@@ -13,7 +13,6 @@ from modules.mpc_scoring import DataSaving
 plt.rcParams.update({
     'text.usetex': True,
 })
-plt.ion()
 
 t_start_mpc = datetime.datetime(2022,1,1)
 t_end_mpc = datetime.datetime(2022,12,31)

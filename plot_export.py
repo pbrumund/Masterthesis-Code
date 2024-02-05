@@ -388,6 +388,68 @@ ax.grid()
 fig.set_size_inches(15*cm, 7*cm)
 plt.savefig('../Abbildungen/nwp_gp_scoring.pgf', bbox_inches='tight')
 
+# Homoscedastic vs heteroscedastic
+try:
+    trajectory_measured = np.loadtxt('modules/gp/scoring/trajectory_meas.csv')
+except:
+    trajectory_measured = get_trajectory_measured(weather_data, opt)
+    np.savetxt('modules/gp/scoring/trajectory_meas.csv', trajectory_measured)
+try:
+    trajectory_nwp = np.loadtxt('modules/gp/scoring/trajectory_nwp.csv')
+except:
+    trajectory_nwp = get_trajectory_nwp(weather_data, opt)
+    np.savetxt('modules/gp/scoring/trajectory_nwp.csv', trajectory_nwp)
+try:
+    trajectory_gp_prior = np.loadtxt('modules/gp/scoring/trajectory_gp_prior_heteroscedastic_200.csv')
+    var_gp_prior = np.loadtxt('modules/gp/scoring/var_gp_prior_heteroscedastic_200.csv')
+    trajectory_gp_prior_homoscedastic = np.loadtxt('modules/gp/scoring/trajectory_gp_prior_homoscedastic.csv')
+    var_gp_prior_homoscedastic = np.loadtxt('modules/gp/scoring/var_gp_prior_homoscedastic.csv')
+except:
+    trajectory_gp_prior, var_gp_prior = get_trajectory_gp_prior(weather_data, opt)
+    np.savetxt('modules/gp/scoring/trajectory_gp_prior.csv', trajectory_gp_prior)
+    np.savetxt('modules/gp/scoring/var_gp_prior.csv', var_gp_prior)
+rmse_nwp = get_rmse(trajectory_measured, trajectory_nwp)
+mae_nwp = get_mae(trajectory_measured, trajectory_nwp)
+
+rmse_gp_prior_homoscedastic = get_rmse(trajectory_measured, trajectory_gp_prior_homoscedastic)
+mae_gp_prior_homoscedastic = get_mae(trajectory_measured, trajectory_gp_prior_homoscedastic)
+
+alpha_vec = np.linspace(0.01,1,100)
+re_gp_prior_homoscedastic = [get_RE(alpha, trajectory_measured, trajectory_gp_prior_homoscedastic, var_gp_prior_homoscedastic)
+                for alpha in alpha_vec]
+int_score_gp_prior_homoscedastic = [get_interval_score(alpha, trajectory_measured, trajectory_gp_prior_homoscedastic, var_gp_prior_homoscedastic)
+                for alpha in alpha_vec]
+
+percent_in_interval_gp_prior = np.array(re_gp_prior) + (1-alpha_vec)    
+percent_in_interval_gp_prior_homoscedastic = np.array(re_gp_prior_homoscedastic) + (1-alpha_vec)    
+
+print(f'RMSE of NWP: {rmse_nwp}, MAE of NWP: {mae_nwp}')
+print(f'RMSE of GP: {rmse_gp_prior}, MAE of GP: {mae_gp_prior}')
+print(f'RMSE of homoscedastic GP: {rmse_gp_prior_homoscedastic}, MAE of GP: {mae_gp_prior_homoscedastic}')
+
+fig, axs = plt.subplots(1, 3, layout='constrained')
+ax = axs[0]
+ax.plot(alpha_vec, re_gp_prior)
+ax.plot(alpha_vec, re_gp_prior_homoscedastic)
+ax.set_xlabel(r'$\alpha$')
+ax.set_ylabel('Reliability evaluation')
+ax.grid()
+ax = axs[1]
+ax.plot(alpha_vec, int_score_gp_prior)
+ax.plot(alpha_vec, int_score_gp_prior_homoscedastic)
+ax.set_xlabel(r'$\alpha$')
+ax.set_ylabel('Interval score')
+ax.grid()
+ax = axs[2]
+ax.plot(1-alpha_vec, percent_in_interval_gp_prior)
+ax.plot(1-alpha_vec, percent_in_interval_gp_prior_homoscedastic)
+ax.plot(alpha_vec, alpha_vec, '--', color='tab:gray', alpha=0.75, lw=0.5)
+ax.set_xlabel(r'1-$\alpha$')
+ax.set_ylabel(r'Actual proportion in 1-$\alpha$-interval')
+ax.grid()
+fig.legend(['Heteroscedastic GP', 'Homoscedastic GP'], loc='upper center', bbox_to_anchor = (0.5,1.15), ncol=2)
+fig.set_size_inches(15*cm, 7*cm)
+plt.savefig('../Abbildungen/nwp_gp_scoring_homoscedastic_heteroscedastic.pgf', bbox_inches='tight')
 
 steps_forward = opt['steps_forward']
 rmse_post = np.zeros(steps_forward)

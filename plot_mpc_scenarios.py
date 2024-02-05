@@ -17,14 +17,16 @@ t_start = datetime.datetime(2022,1,17,4)
 steps = 30
 epsilon = 0.1
 std_factor = norm.ppf(1-epsilon)
+std_list = (-std_factor, 0, std_factor)
 
 gp_opt = get_gp_opt(steps_forward=steps)
 gp = TimeseriesModel(gp_opt)
 dh = gp.data_handler
 
 ohps = OHPS()
+ohps.setup_integrator(600)
 
-mpc_opt = get_mpc_opt(N=steps, use_simple_scenarios=False)
+mpc_opt = get_mpc_opt(N=steps, use_simple_scenarios=False, std_list_multistage = std_list, dE_min=5000)
 multistage_mpc = MultistageMPC(ohps, gp, mpc_opt)
 
 times = [t_start + i*datetime.timedelta(minutes=10) for i in range(steps)]
@@ -67,12 +69,17 @@ wind_power_nwp = np.array([ohps.get_P_wtg(0,0,w) for w in trajectory_nwp]).resha
 ax_pred[1].plot(times, np.array(wind_power_nwp), color='tab:red', label='NWP')
 ax_pred[0].set_ylabel('Wind speed (m/s)')
 ax_pred[1].set_ylabel('Wind power (kW)')
-ax_pred[0].set_xlabel('Time (h)')
-ax_pred[0].xaxis.set_major_formatter(matplotlib.dates.DateFormatter('%H'))
-ax_pred[1].xaxis.set_major_formatter(matplotlib.dates.DateFormatter('%H'))
+ax_pred[1].set_xlabel('Time (h)')
+ax_pred[0].xaxis.set_major_formatter(matplotlib.dates.DateFormatter('%H:%M'))
+ax_pred[1].xaxis.set_major_formatter(matplotlib.dates.DateFormatter('%H:%M'))
 ax_pred[0].grid()
 ax_pred[1].grid()
 ax_pred[0].margins(x=0)
 ax_pred[1].margins(x=0)
+handles = [plt_gp, plt_sc, plt_meas, plt_nwp]
+fig.legend(handles=handles, ncol=4, loc='upper center', bbox_to_anchor=(0.5,1.05))
+cm = 1/2.54
+fig.set_size_inches(15*cm, 10*cm)
+plt.savefig(f'../Abbildungen/mpc_scenarios_{t_start.strftime("%d_%m_%H")}.pdf', bbox_inches='tight')
 plt.show()
 pass

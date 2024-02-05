@@ -44,7 +44,7 @@ class WindPredictionGP:
             steps_ahead = opt['steps_ahead']
             times = [start_datetime + i*datetime.timedelta(minutes=self.opt['dt_meas']) 
                      for i in range(steps_ahead+n_last, n_points)]
-            n_points = len(times)
+            # n_points = len(times)
             n_x = self.data_handler.generate_features(
                 times[0], n_last, opt['input_feature'], 0).shape[0]
             
@@ -52,11 +52,17 @@ class WindPredictionGP:
                         for time in times]# for steps_ahead in range(1,max_steps_ahead)]
             args_y = [(time, opt['label'], steps_ahead)
                         for time in times]# for steps_ahead in range(1,max_steps_ahead)]
+            if opt['steps_ahead'] == 0:
+                # add training data for 6 hour horizon
+                args_X = args_X + [(time, n_last, opt['input_feature'], 36) 
+                        for time in times]
+                args_y = args_y + [(time, opt['label'], 36) for time in times]
             with Pool(processes=12) as pool:
                 X_train = pool.starmap(self.data_handler.generate_features, args_X, chunksize=1000)
                 if self.opt['verbose']:
                     print('finished generating X_train')
                 y_train = pool.starmap(self.data_handler.generate_labels, args_y, chunksize=1000)
+                n_points = len(y_train)
                 if self.opt['verbose']:
                     print('finished generating y_train')
                 X_train = np.array(X_train).reshape((n_points, n_x))
