@@ -8,6 +8,7 @@ from .utils import get_NWP, get_wind_value, generate_features
 from .data_handling import DataHandler
 from .fileloading import load_weather_data
 from .gp_timeseries_model import TimeseriesModel
+from .gp_timeseries_model_homoscedastic import HomoscedasticTimeseriesModel
 from .gp_direct_model import DirectGPEnsemble
 from .gp_simple_timeseries_model import SimpleTimeseriesModel
 
@@ -67,7 +68,7 @@ def get_trajectory_nwp(weather_data, opt):
         meas_traj[i] = get_NWP(weather_data, t, 0)
     return meas_traj
 
-def get_trajectory_gp_prior(weather_data, opt):
+def get_trajectory_gp_prior(opt):
     gp = TimeseriesModel(opt)
     dh = gp.data_handler
     t_start = opt['t_start_score']
@@ -80,7 +81,7 @@ def get_trajectory_gp_prior(weather_data, opt):
     mean_traj = np.zeros(n_steps)
     var_traj = np.zeros(n_steps)
     for i, t in enumerate(times):
-            NWP_traj[i] = get_NWP(weather_data, t, 0)
+            NWP_traj[i] = dh.get_NWP(t)
             x = dh.generate_features(t, feature='nwp & time', steps_ahead=0).reshape((1,-1))
             mean, var = gp.gp_prior.compiled_predict_y(x)
             mean_traj[i] = mean
@@ -90,6 +91,29 @@ def get_trajectory_gp_prior(weather_data, opt):
     gp_pred_traj = NWP_traj + mean_traj
     return gp_pred_traj, var_traj
     
+def get_trajectory_gp_prior_homoscedastic(opt):
+    gp = HomoscedasticTimeseriesModel(opt)
+    dh = gp.data_handler
+    t_start = opt['t_start_score']
+    t_end = opt['t_end_score']
+    dt = t_end-t_start
+    n_steps = int(dt.total_seconds()/600)
+    times = [t_start+i*datetime.timedelta(minutes=10) for i in range(n_steps)]
+
+    NWP_traj = np.zeros(n_steps)
+    mean_traj = np.zeros(n_steps)
+    var_traj = np.zeros(n_steps)
+    for i, t in enumerate(times):
+            NWP_traj[i] = dh.get_NWP(t)
+            x = dh.generate_features(t, feature='nwp & time', steps_ahead=0).reshape((1,-1))
+            mean, var = gp.gp_prior.compiled_predict_y(x)
+            mean_traj[i] = mean
+            var_traj[i] = var
+            if (i+1)%int(n_steps/20)==0:
+                    print(f'{int((i+1)/int(n_steps/20)*5)}% done')
+    gp_pred_traj = NWP_traj + mean_traj
+    return gp_pred_traj, var_traj
+
 def get_posterior_trajectories(opt):
     try:
         trajectories_mean = np.loadtxt(f'modules/gp/scoring/trajectories_mean_post_{opt["n_last"]}.csv')
@@ -157,7 +181,7 @@ def get_simple_timeseries_traj(opt):
         else:
             train = False
         trajectory_mean_gp, trajectory_var_gp = gp.predict_trajectory(
-            time, opt['steps_forward'], train)
+            time, opt['steps_forward'], train, include_last_measurement=False)
         trajectories_mean[i,:] = trajectory_mean_gp
         trajectories_var[i,:] = trajectory_var_gp
         with open('modules/gp/scoring/trajectories_mean_simple_timeseries.csv', 'a') as file:

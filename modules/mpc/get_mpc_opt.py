@@ -38,7 +38,7 @@ def get_nlp_opt(**kwargs):
         'print_frequency_iter': 10,
         'print_level': 5,
         'max_iter': 1000,
-        'linear_solver': 'ma86',
+        'linear_solver': 'mumps',
         # 'tol': 0.0001,
         # 'dual_inf_tol': 10,
         # 'compl_inf_tol': .001,
