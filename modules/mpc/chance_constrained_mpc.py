@@ -33,15 +33,29 @@ class ChanceConstrainedMPC(NominalMPC):
         s_P_ub = ca.inf*ca.DM.ones(self.horizon)
         
         v = ca.vertcat(U_mat.reshape((-1,1)), X_mat.reshape((-1,1)), s_P)   # Vector for optimization problem
-        
+        if self.opt['use_soft_constraints_state']:
+            # x_lb_sc - x - s_x <=0, x - s_x - x_ub_sc <= 0
+            s_x = ca.MX.sym('s_xl', self.horizon) # for x + s_x >= x_lb_sc, x - s_x <= x_ub_sc
+            s_x_lb = ca.DM.zeros(self.horizon)
+            s_x_ub = ca.inf*ca.DM.ones(self.horizon)
+            # s_xu = ca.MX.sym('s_xu', self.horizon) # for 
+            # s_xu_lb = ca.DM.zeros(self.horizon)
+            # s_xu_ub = ca.inf*ca.DM.ones(self.horizon)
+            v = ca.vertcat(v, s_x)# , s_xu)
+            # , s_xu_ub)
+            self.get_s_x_from_v_fun = ca.Function('get_s_x_from_v', [v], [s_x], ['v'], ['s_xl'])
+            # self.get_s_xu_from_v_fun = ca.Function('get_s_xu_from_v', [v], [s_xu], ['v'], ['s_xu'])
         self.get_u_from_v_fun = ca.Function('get_u_from_v', [v], [U_mat], ['v'], ['U_mat'])
         self.get_x_from_v_fun = ca.Function('get_x_from_v', [v], [X_mat], ['v'], ['X_mat'])
-        self.get_s_from_v_fun = ca.Function('get_s_from_v', [v], [s_P], ['v'], ['s_P'])
+        self.get_s_from_v_fun = ca.Function('get_s_P_from_v', [v], [s_P], ['v'], ['s_P'])
         self.get_v_fun = ca.Function('get_v', [U_mat, X_mat, s_P], [v], 
                                      ['U_mat', 'X_mat', 's_P'], ['v'])
 
         v_lb = self.get_v_fun(U_lb, X_lb, s_P_lb)
         v_ub = self.get_v_fun(U_ub, X_ub, s_P_ub)
+        if self.opt['use_soft_constraints_state']:
+            v_lb = ca.vertcat(v_lb, s_x_lb)
+            v_ub = ca.vertcat(v_ub, s_x_ub)
         return v, v_lb, v_ub
     
     def get_optimization_parameters(self):
@@ -119,7 +133,20 @@ class ChanceConstrainedMPC(NominalMPC):
             g.append(g_demand)
             g_lb.append(g_demand_lb)
             g_ub.append(g_demand_ub)
-
+            if self.opt['use_soft_constraints_state']:
+                s_x = self.get_s_x_from_v_fun(v)
+                sc_backoff = 0.05
+                x_lb_sc = self.ohps.lbx + sc_backoff
+                x_ub_sc = self.ohps.ubx - sc_backoff
+                g_x_lb = x_lb_sc - x_next - s_x[i]
+                g_x_ub = x_next - x_ub_sc - s_x[i]
+                g.append(g_x_lb)
+                g_lb.append(-ca.inf)
+                g_ub.append(0)
+                g.append(g_x_ub)
+                g_lb.append(-ca.inf)
+                g_ub.append(0)
+        
         g = ca.vertcat(*g)
         g_lb = ca.vertcat(*g_lb)
         g_ub = ca.vertcat(*g_ub)

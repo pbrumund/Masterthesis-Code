@@ -13,6 +13,7 @@ class NominalMPC(MPC):
         self.nx = self.ohps.nx
         self.nu = self.ohps.nu
         self.param = opt['param']
+        self.opt = opt
 
     def get_optimization_variables(self):
         """
@@ -62,7 +63,7 @@ class NominalMPC(MPC):
                                      ['x0', 'P_gtg_last', 'wind_speeds', 'P_demand'], ['p'])
         return p
 
-    def stage_cost(self, state, input, s_P, i, P_gtg_last=None):
+    def stage_cost(self, state, input, s_P, i, P_gtg_last=None, s_x = None):
         # P_gtg_last = None
         x_gtg = self.ohps.get_x_gtg(state)
         u_gtg = self.ohps.get_u_gtg(input)
@@ -82,6 +83,8 @@ class NominalMPC(MPC):
         J_bat = -self.param['k_bat']*SOC
         J_u = input.T@self.param['R_input']@input
         J_s_P = self.param['r_s_P']*(s_P**2)/(self.ohps.P_wtg_max+self.ohps.P_gtg_max)/(1+i)**2
+        if self.opt['use_soft_constraints_state']:
+            J_s_x = self.param['r_s_x']*s_x**2
         # J_gtg_dP = self.param['k_gtg_dP']*ca.log(100*ca.fabs(u_gtg)/self.ohps.gtg.bounds['ubu']+1)
         # J_gtg += J_gtg_dP
         if P_gtg_last is not None:
@@ -102,6 +105,8 @@ class NominalMPC(MPC):
         X_mat = self.get_x_from_v_fun(v)
         U_mat = self.get_u_from_v_fun(v)
         s_P = self.get_s_from_v_fun(v)
+        if self.opt['use_soft_constraints_state']:
+            s_x = self.get_s_x_from_v_fun(v)
         # get initial state from parameters
         x0 = self.get_x0_fun(p)
         P_gtg_last = self.get_P_gtg_0_fun(p)
@@ -114,7 +119,11 @@ class NominalMPC(MPC):
                 x_i = X_mat[i-1,:]
             u_i = U_mat[i,:].T
             s_P_i = s_P[i,:]
-            J += self.stage_cost(x_i, u_i, s_P_i, i, P_gtg_last)
+            if self.opt['use_soft_constraints_state']:
+                s_x_i = s_x[i]
+            else:
+                s_x_i = None
+            J += self.stage_cost(x_i, u_i, s_P_i, i, P_gtg_last, s_x_i)
             # Parameter tuning
             self.J_gtg += self.J_gtg_i
             self.J_gtg_P += self.J_gtg_P_i

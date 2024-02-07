@@ -11,7 +11,8 @@ def get_mpc_opt(method='nominal', **kwargs):
         'dE_min': 5000,
         'use_chance_constraints_multistage': False,
         'std_list_multistage': (-1,0,1),
-        'use_simple_scenarios': False
+        'use_simple_scenarios': False,
+        'use_soft_constraints_state': False
     }
     param = {
         'alpha_1': -0.4,
@@ -24,6 +25,7 @@ def get_mpc_opt(method='nominal', **kwargs):
         'k_bat': .5,#.1,#.5,
         'R_input': ca.diag([0,1e-8]),# 5e-6
         'r_s_P': 1000,
+        'r_s_x': 1000,
         'k_gtg_dP': 5,#5,#.5,
         'k_bat_final': 0#500
     }

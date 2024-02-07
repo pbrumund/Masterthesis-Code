@@ -65,6 +65,8 @@ def get_shepherd_model_LiIon(N_p=1, N_s=1):
     battery.set_parameter('Q', 1)
     battery.set_parameter('N_p', N_p)
     battery.set_parameter('N_s', N_s)
+    battery.N_p = N_p
+    battery.N_s = N_s
     battery.set_bounds(lbx=ca.DM(0.1), ubx=ca.DM(0.9), lbu=ca.DM(-1*N_p), ubu=ca.DM(1*N_p))
     battery.get_SOC_fun = ca.Function('get_SOC', [battery._x, battery._u], 
         [battery.get_SOC_fun(battery._x, battery._u, battery.parameter_values[2])], 
@@ -74,7 +76,7 @@ def get_shepherd_model_LiIon(N_p=1, N_s=1):
 
 
 if __name__ == "__main__":
-    battery = get_shepherd_model_LiIon(N_p=8000, N_s = 170)
+    battery = get_shepherd_model_LiIon(N_p=32000, N_s = 330)
     battery.setup_integrator(dt=600)
     p_const = 1000
     n = 30
