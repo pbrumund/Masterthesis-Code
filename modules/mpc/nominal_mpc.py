@@ -31,17 +31,20 @@ class NominalMPC(MPC):
         s_P = ca.MX.sym('s_P', self.horizon)    # for soft power constraints
         s_P_lb = -ca.inf*ca.DM.ones(self.horizon)
         s_P_ub = ca.inf*ca.DM.ones(self.horizon)
-        
-        v = ca.vertcat(U_mat.reshape((-1,1)), X_mat.reshape((-1,1)), s_P)   # Vector for optimization problem
+        s_x = ca.MX.sym('s_xl', self.horizon) # for x + s_x >= x_lb_sc, x - s_x <= x_ub_sc
+        s_x_lb = ca.DM.zeros(self.horizon)
+        s_x_ub = ca.inf*ca.DM.ones(self.horizon)
+        v = ca.vertcat(U_mat.reshape((-1,1)), X_mat.reshape((-1,1)), s_P, s_x)
         
         self.get_u_from_v_fun = ca.Function('get_u_from_v', [v], [U_mat], ['v'], ['U_mat'])
         self.get_x_from_v_fun = ca.Function('get_x_from_v', [v], [X_mat], ['v'], ['X_mat'])
         self.get_s_from_v_fun = ca.Function('get_s_from_v', [v], [s_P], ['v'], ['s_P'])
-        self.get_v_fun = ca.Function('get_v', [U_mat, X_mat, s_P], [v], 
-                                     ['U_mat', 'X_mat', 's_P'], ['v'])
+        self.get_s_x_from_v_fun = ca.Function('get_s_x_from_v', [v], [s_x], ['v'], ['s_xl'])
+        self.get_v_fun = ca.Function('get_v', [U_mat, X_mat, s_P, s_x], [v], 
+                                     ['U_mat', 'X_mat', 's_P', 's_x'], ['v'])
 
-        v_lb = self.get_v_fun(U_lb, X_lb, s_P_lb)
-        v_ub = self.get_v_fun(U_ub, X_ub, s_P_ub)
+        v_lb = self.get_v_fun(U_lb, X_lb, s_P_lb, s_x_lb)
+        v_ub = self.get_v_fun(U_ub, X_ub, s_P_ub, s_x_ub)
         return v, v_lb, v_ub
 
     def get_optimization_parameters(self):
@@ -84,7 +87,9 @@ class NominalMPC(MPC):
         J_u = input.T@self.param['R_input']@input
         J_s_P = self.param['r_s_P']*(s_P**2)/(self.ohps.P_wtg_max+self.ohps.P_gtg_max)/(1+i)**2
         if self.opt['use_soft_constraints_state']:
-            J_s_x = self.param['r_s_x']*s_x**2
+            J_s_x = self.param['r_s_x']*s_x
+        else:
+            J_s_x = 0
         # J_gtg_dP = self.param['k_gtg_dP']*ca.log(100*ca.fabs(u_gtg)/self.ohps.gtg.bounds['ubu']+1)
         # J_gtg += J_gtg_dP
         if P_gtg_last is not None:
@@ -97,7 +102,8 @@ class NominalMPC(MPC):
         self.J_bat_i = J_bat
         self.J_u_i = J_u
         self.J_s_P_i = J_s_P
-        return J_gtg+J_bat+J_u+J_s_P
+        self.J_s_x_i = J_s_x
+        return J_gtg+J_bat+J_u+J_s_P+J_s_x
     
     def cost_function(self, v, p):
         """Return the cost function depending on the optimization variable and the parameters"""
@@ -105,13 +111,12 @@ class NominalMPC(MPC):
         X_mat = self.get_x_from_v_fun(v)
         U_mat = self.get_u_from_v_fun(v)
         s_P = self.get_s_from_v_fun(v)
-        if self.opt['use_soft_constraints_state']:
-            s_x = self.get_s_x_from_v_fun(v)
+        s_x = self.get_s_x_from_v_fun(v)
         # get initial state from parameters
         x0 = self.get_x0_fun(p)
         P_gtg_last = self.get_P_gtg_0_fun(p)
         J = 0
-        self.J_gtg = self.J_gtg_P = self.J_gtg_eta = self.J_gtg_dP = self.J_bat = self.J_u = self.J_s_P = 0
+        self.J_gtg = self.J_gtg_P = self.J_gtg_eta = self.J_gtg_dP = self.J_bat = self.J_u = self.J_s_P = self.J_s_x = 0
         for i in range(self.horizon):
             if i == 0:
                 x_i = x0
@@ -119,10 +124,8 @@ class NominalMPC(MPC):
                 x_i = X_mat[i-1,:]
             u_i = U_mat[i,:].T
             s_P_i = s_P[i,:]
-            if self.opt['use_soft_constraints_state']:
-                s_x_i = s_x[i]
-            else:
-                s_x_i = None
+            s_x_i = s_x[i]
+
             J += self.stage_cost(x_i, u_i, s_P_i, i, P_gtg_last, s_x_i)
             # Parameter tuning
             self.J_gtg += self.J_gtg_i
@@ -132,7 +135,7 @@ class NominalMPC(MPC):
             self.J_bat += self.J_bat_i
             self.J_u += self.J_u_i
             self.J_s_P += self.J_s_P_i
-
+            self.J_s_x += self.J_s_x_i
             P_gtg = self.ohps.get_P_gtg(x_i, u_i, 0)
             # J += self.param['k_gtg_dP']*ca.log(100*ca.fabs(P_gtg-P_gtg_last)/self.param['P_gtg_max']+1)
             P_gtg_last = P_gtg#self.ohps.get_P_gtg(x_i, u_i, 0)
@@ -152,6 +155,7 @@ class NominalMPC(MPC):
         self.J_bat_fun = ca.Function('J_bat', [v, p], [self.J_bat])
         self.J_u_fun = ca.Function('J_u', [v, p], [self.J_u])
         self.J_s_P_fun = ca.Function('J_s_P', [v, p], [self.J_s_P])
+        self.J_s_x_fun = ca.Function('J_s_x', [v, p], [self.J_s_x])
         return J
     def get_constraints(self, v, p):
         """
@@ -198,7 +202,19 @@ class NominalMPC(MPC):
             g.append(g_demand)
             g_lb.append(g_demand_lb)
             g_ub.append(g_demand_ub)
-
+            if self.opt['use_soft_constraints_state']:
+                s_x = self.get_s_x_from_v_fun(v)
+                sc_backoff = 0.05
+                x_lb_sc = self.ohps.lbx + sc_backoff
+                x_ub_sc = self.ohps.ubx - sc_backoff
+                g_x_lb = x_lb_sc - x_next - s_x[i]
+                g_x_ub = x_next - x_ub_sc - s_x[i]
+                g.append(g_x_lb)
+                g_lb.append(-ca.inf)
+                g_ub.append(0)
+                g.append(g_x_ub)
+                g_lb.append(-ca.inf)
+                g_ub.append(0)
         g = ca.vertcat(*g)
         g_lb = ca.vertcat(*g_lb)
         g_ub = ca.vertcat(*g_ub)
@@ -238,7 +254,8 @@ class NominalMPC(MPC):
             X_init = ca.vertcat(X_last[1:,:], X_last[-1,:])
             P_demand = self.get_P_demand_fun(p)
             s_P_init = ca.vertcat(s_P_last[1:,:], P_demand[-1])
-            return self.get_v_fun(U_init, X_init, s_P_init)
+            s_x_init = ca.DM.zeros(self.horizon)
+            return self.get_v_fun(U_init, X_init, s_P_init, s_x_init)
         # No last solution provided, guess zeros for inputs and initial state for X
         P_gtg_init = 0.8*self.ohps.gtg.bounds['ubu']*ca.DM.ones(self.horizon)
         I_bat_init = ca.DM.zeros(self.horizon)
@@ -249,5 +266,6 @@ class NominalMPC(MPC):
         # s_P_init = P_demand - self.ohps.gtg.bounds['ubu']*ca.DM.ones(self.horizon)
         # s_P_init = 1/3*self.get_P_demand_fun(p)
         s_P_init = ca.DM.zeros(self.horizon)
-        return self.get_v_fun(U_init, X_init, s_P_init)
+        s_x_init = ca.DM.zeros(self.horizon)
+        return self.get_v_fun(U_init, X_init, s_P_init, s_x_init)
 

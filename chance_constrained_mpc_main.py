@@ -106,13 +106,15 @@ for k, t in enumerate(times, start=start):
           J_gtg_eta: {chance_constrained_mpc.J_gtg_eta_fun(v_opt, p)}, 
           J_gtg_dP: {chance_constrained_mpc.J_gtg_dP_fun(v_opt, p)}''')
     print(f'Battery cost term: {chance_constrained_mpc.J_bat_fun(v_opt, p)}')
-    print(f'Slip variables: {chance_constrained_mpc.J_s_P_fun(v_opt, p)}')
+    print(f'Power slack variables: {chance_constrained_mpc.J_s_P_fun(v_opt, p)}')
+    print(f'State slack variables: {chance_constrained_mpc.J_s_x_fun(v_opt, p)}')
     print(f'Control variables: {chance_constrained_mpc.J_u_fun(v_opt, p)}')
 
     u_opt = chance_constrained_mpc.get_u_from_v_fun(v_opt)
     u_k = u_opt[0,:]
     s_P_opt = chance_constrained_mpc.get_s_from_v_fun(v_opt)
     s_P_k = s_P_opt[0]
+    # Simulate with low level controller adding uncertainty to battery
     i_opt, x_next = llc.simulate(t, x_k, u_k, s_P_k, P_demand[0])
     u_k[1] = i_opt
 

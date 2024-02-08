@@ -31,31 +31,21 @@ class ChanceConstrainedMPC(NominalMPC):
         s_P = ca.MX.sym('s_P', self.horizon)    # for soft power constraints
         s_P_lb = ca.DM.zeros(self.horizon)
         s_P_ub = ca.inf*ca.DM.ones(self.horizon)
+        # x_lb_sc - x - s_x <=0, x - s_x - x_ub_sc <= 0
+        s_x = ca.MX.sym('s_xl', self.horizon) # for x + s_x >= x_lb_sc, x - s_x <= x_ub_sc
+        s_x_lb = ca.DM.zeros(self.horizon)
+        s_x_ub = ca.inf*ca.DM.ones(self.horizon)
+        v = ca.vertcat(U_mat.reshape((-1,1)), X_mat.reshape((-1,1)), s_P, s_x)   # Vector for optimization problem
         
-        v = ca.vertcat(U_mat.reshape((-1,1)), X_mat.reshape((-1,1)), s_P)   # Vector for optimization problem
-        if self.opt['use_soft_constraints_state']:
-            # x_lb_sc - x - s_x <=0, x - s_x - x_ub_sc <= 0
-            s_x = ca.MX.sym('s_xl', self.horizon) # for x + s_x >= x_lb_sc, x - s_x <= x_ub_sc
-            s_x_lb = ca.DM.zeros(self.horizon)
-            s_x_ub = ca.inf*ca.DM.ones(self.horizon)
-            # s_xu = ca.MX.sym('s_xu', self.horizon) # for 
-            # s_xu_lb = ca.DM.zeros(self.horizon)
-            # s_xu_ub = ca.inf*ca.DM.ones(self.horizon)
-            v = ca.vertcat(v, s_x)# , s_xu)
-            # , s_xu_ub)
-            self.get_s_x_from_v_fun = ca.Function('get_s_x_from_v', [v], [s_x], ['v'], ['s_xl'])
-            # self.get_s_xu_from_v_fun = ca.Function('get_s_xu_from_v', [v], [s_xu], ['v'], ['s_xu'])
         self.get_u_from_v_fun = ca.Function('get_u_from_v', [v], [U_mat], ['v'], ['U_mat'])
         self.get_x_from_v_fun = ca.Function('get_x_from_v', [v], [X_mat], ['v'], ['X_mat'])
         self.get_s_from_v_fun = ca.Function('get_s_P_from_v', [v], [s_P], ['v'], ['s_P'])
-        self.get_v_fun = ca.Function('get_v', [U_mat, X_mat, s_P], [v], 
-                                     ['U_mat', 'X_mat', 's_P'], ['v'])
+        self.get_s_x_from_v_fun = ca.Function('get_s_x_from_v', [v], [s_x], ['v'], ['s_xl'])
+        self.get_v_fun = ca.Function('get_v', [U_mat, X_mat, s_P, s_x], [v], 
+                                     ['U_mat', 'X_mat', 's_P', 's_x'], ['v'])
 
-        v_lb = self.get_v_fun(U_lb, X_lb, s_P_lb)
-        v_ub = self.get_v_fun(U_ub, X_ub, s_P_ub)
-        if self.opt['use_soft_constraints_state']:
-            v_lb = ca.vertcat(v_lb, s_x_lb)
-            v_ub = ca.vertcat(v_ub, s_x_ub)
+        v_lb = self.get_v_fun(U_lb, X_lb, s_P_lb, s_x_lb)
+        v_ub = self.get_v_fun(U_ub, X_ub, s_P_ub, s_x_ub)
         return v, v_lb, v_ub
     
     def get_optimization_parameters(self):
