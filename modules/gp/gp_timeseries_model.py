@@ -409,7 +409,7 @@ class TimeseriesModel(WindPredictionGP):
             self.gp_timeseries.covar_module.kernel.gamma = 0.5
     
     def predict_trajectory(self, start_time, steps, train=False, pseudo_gp = None, 
-                           include_last_measurement=True):
+                           include_last_measurement=False):
         """
         Set up the timeseries GP and train if required, then predict a number of steps ahead
         returns mean and variance as numpy arrays
@@ -492,11 +492,6 @@ class TimeseriesModel(WindPredictionGP):
         # x_train_pseudo = torch.cat(self.X_train_timeseries, pseudo_indices)
         # y_train_pseudo = torch.cat(self.y_train_timeseries, pseudo_outputs)
         
-
-
-
-
-
     def plot_prior(self, start_time, steps):
         """Plot predictions of prior GP"""
         times = [start_time+i*datetime.timedelta(minutes=self.opt['dt_meas']) for i in range(steps)]

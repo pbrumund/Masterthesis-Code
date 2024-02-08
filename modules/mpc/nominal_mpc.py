@@ -184,7 +184,6 @@ class NominalMPC(MPC):
             x_next = self.ohps.get_next_state(x_i, u_i)
             # System dynamics
             # x_k+1 - f(x_k, u_k) = 0^
-            # TODO: possibly test implicit RK method for discretisation of dynamic model
             g_state = X_mat[i,:].T - x_next
             g_state_lb = ca.DM.zeros(self.nx)
             g_state_ub = ca.DM.zeros(self.nx)

@@ -7,7 +7,7 @@ from scipy.stats import norm
 
 from modules.gp import TimeseriesModel, DataHandler, get_gp_opt
 from modules.models import OHPS
-from modules.mpc import MultistageMPC, get_mpc_opt
+from modules.mpc import MultistageMPC, LowLevelController, get_mpc_opt
 from modules.plotting import TimeseriesPlot
 from modules.mpc_scoring import DataSaving
 
@@ -40,6 +40,7 @@ P_traj = ca.DM.zeros(n_times, 5)    # gtg, battery, wtg, total, demand
 SOC_traj = ca.DM.zeros(n_times)
 
 data_handler = DataHandler(datetime.datetime(2020,1,1), datetime.datetime(2022,12,31), gp_opt)
+llc = LowLevelController(ohps, data_handler, mpc_opt)
 x_k = ohps.x0
 v_last = None
 v_init_next = None
@@ -113,6 +114,10 @@ for k, t in enumerate(times, start=start):
     print(f'Control variables: {multistage_mpc.J_u_fun(v_opt, p)}')
 
     u_k = multistage_mpc.get_u_next_fun(v_opt)
+    s_P_k = multistage_mpc.get_s_P_next_fun(v_opt)
+    # Simulate with low level controller adding uncertainty to battery
+    i_opt, x_next = llc.simulate(t, x_k, u_k, s_P_k, P_demand[0])
+    u_k[1] = i_opt
 
     # save state, input, SOC and power trajectories
     x_traj[k,:] = x_k
@@ -184,9 +189,7 @@ for k, t in enumerate(times, start=start):
     # v_init_next = multistage_mpc.get_initial_guess(v_last, P_wtg, x_k, P_demand)
     P_gtg_last = P_gtg
     P_demand_last = P_demand
-    # TODO: for simulation: maybe use smaller time scale and vary wind speed for each subinterval 
-    # as wind power is not simply a function of the mean wind speed, 
-    # possibly account for this uncertainty in gp
+    
     # plt.pause(0.001)
     plt.draw()
 pass
