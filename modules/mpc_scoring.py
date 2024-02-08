@@ -1,4 +1,5 @@
 import hashlib
+import json
 
 import numpy as np
 
@@ -11,7 +12,8 @@ def get_filename_save(mpc_name, mpc_opt, gp_opt):
     run_id = hashlib.md5(str(opt_dict).encode('UTF-8')).hexdigest()[:10]
     filename_data = f'data/simulation_runs/{mpc_name}_data_{run_id}.csv'
     filename_times = f'data/simulation_runs/{mpc_name}_times_{run_id}.csv'
-    return filename_data, filename_times
+    filename_dict = f'data/simulation_tuns/{mpc_name}_param_{run_id}.csv'
+    return filename_data, filename_times, filename_dict
 
 def get_power_error(mpc_name, mpc_opt, gp_opt, run_id=None):
     """Get absolute energy error in MWh and error relative to total demand"""
@@ -53,7 +55,11 @@ class DataSaving:
         self.mpc_opt = mpc_opt
         self.gp_opt = gp_opt
         if run_id is None:
-            self.filename_data, self.filename_times = get_filename_save(mpc_name, mpc_opt, gp_opt)
+            self.filename_data, self.filename_times, filename_opt = get_filename_save(
+                mpc_name, mpc_opt, gp_opt)
+            with open(filename_opt, 'w') as fp:
+                json.dump(mpc_opt, fp)
+                json.dump(gp_opt, fp)
         else:
             self.filename_data = f'data/simulation_runs/{mpc_name}_data_{run_id}.csv'
             self.filename_times = f'data/simulation_runs/{mpc_name}_times_{run_id}.csv'
