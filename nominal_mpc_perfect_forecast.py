@@ -20,10 +20,10 @@ mpc_opt['t_start'] = t_start
 mpc_opt['t_end'] = t_end
 # mpc_opt['param']['k_gtg_P'] = 10
 # mpc_opt['param']['k_gtg_eta'] = 50
-# mpc_opt['param']['k_gtg_dP'] = 5
+# mpc_opt['param']['k_gtg_dP'] = 1
 # mpc_opt['param']['k_gtg_fuel'] = 0
-# mpc_opt['param']['k_bat'] = .5
-# mpc_opt['param']['R_input'] = ca.diag([0,1e-6])
+# mpc_opt['param']['k_bat'] = 1
+# mpc_opt['param']['R_input'] = ca.diag([0,1e-8])
 nominal_mpc = NominalMPC(ohps, mpc_opt)
 
 nominal_mpc.get_optimization_problem()
@@ -58,6 +58,9 @@ P_demand_last = None
 #                             title = 'Nominal MPC with perfect forecast, Control inputs')
 # save trajectories to file
 dims = {'Power output': 4, 'Power demand': 1, 'SOC': 1, 'Inputs': 2}
+del mpc_opt['use_soft_constraints_state']
+del mpc_opt['param']['r_s_x']
+mpc_opt['param']['r_s_P'] = 1000
 data_saver = DataSaving('nominal_mpc_perfect_forecast', mpc_opt, gp_opt, dims)
 
 # load trajectories if possible

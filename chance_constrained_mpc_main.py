@@ -45,13 +45,13 @@ P_gtg_last = ohps.gtg.bounds['ubu']*0.8
 P_demand_last = None
 
 # create plots
-plt_power = TimeseriesPlot('Time', 'Power output', 
-    ['Gas turbine', 'Battery', 'Wind turbine', 'Total power generation', 'Demand'],
-    title='Chance constrained MPC, Power output')
-plt_SOC = TimeseriesPlot('Time', 'Battery SOC', title='Chance constrained MPC, Battery SOC')
-plt_inputs = TimeseriesPlot('Time', 'Control input', ['Gas turbine power', 'Battery current'],
-                            title='Chance constrained MPC, control inputs')
-fig_gp, ax_gp = plt.subplots(2, sharex=True, num='Chance constrained MPC, wind prediction')
+# plt_power = TimeseriesPlot('Time', 'Power output', 
+#     ['Gas turbine', 'Battery', 'Wind turbine', 'Total power generation', 'Demand'],
+#     title='Chance constrained MPC, Power output')
+# plt_SOC = TimeseriesPlot('Time', 'Battery SOC', title='Chance constrained MPC, Battery SOC')
+# plt_inputs = TimeseriesPlot('Time', 'Control input', ['Gas turbine power', 'Battery current'],
+#                             title='Chance constrained MPC, control inputs')
+# fig_gp, ax_gp = plt.subplots(2, sharex=True, num='Chance constrained MPC, wind prediction')
 
 # save trajectories to file
 dims = {'Power output': 4, 'Power demand': 1, 'SOC': 1, 'Inputs': 2} # State: 1
@@ -129,43 +129,43 @@ for k, t in enumerate(times, start=start):
     P_traj[k,:] = ca.vertcat(P_gtg, P_bat, P_wtg, P_total, P_demand[0])
     SOC_traj[k] = ohps.get_SOC_bat(x_k, u_k, w_k)
 
-    plt_inputs.plot(times_plot[:k], u_traj[:k,:])
-    plt_power.plot(times_plot[:k], P_traj[:k,:])
-    plt_SOC.plot(times_plot[:k], SOC_traj[:k])
+    # plt_inputs.plot(times_plot[:k], u_traj[:k,:])
+    # plt_power.plot(times_plot[:k], P_traj[:k,:])
+    # plt_SOC.plot(times_plot[:k], SOC_traj[:k])
 
     # Plot wind power
-    wind_power_NWP = np.array([ohps.n_wind_turbines*ohps.wind_turbine.power_curve_fun(
-        ohps.wind_turbine.scale_wind_speed(w)) for w in wind_speeds_nwp]).reshape(-1)
-    wind_speeds_meas = [data_handler.get_measurement(t,i) for i in range(chance_constrained_mpc.horizon)]
-    wind_power_meas = np.array([ohps.n_wind_turbines*ohps.wind_turbine.power_curve_fun(
-        ohps.wind_turbine.scale_wind_speed(w)) for w in wind_speeds_meas]).reshape(-1)
-    wind_power_gp = np.array([ohps.n_wind_turbines*ohps.wind_turbine.power_curve_fun(
-        ohps.wind_turbine.scale_wind_speed(w)) for w in wind_speeds_gp]).reshape(-1)
-    wind_power_gp_lb = np.array([ohps.n_wind_turbines*ohps.wind_turbine.power_curve_fun(
-        ohps.wind_turbine.scale_wind_speed(w)) 
-        for w in (np.array(wind_speeds_gp)-chance_constrained_mpc.back_off_factor*np.sqrt(
-            np.array(var_gp)))]).reshape(-1)
-    wind_power_gp_ub = np.array([ohps.n_wind_turbines*ohps.wind_turbine.power_curve_fun(
-        ohps.wind_turbine.scale_wind_speed(w)) 
-        for w in (np.array(wind_speeds_gp)+chance_constrained_mpc.back_off_factor*np.sqrt(
-            np.array(var_gp)))]).reshape(-1)
-    gp_times = [t + i*datetime.timedelta(minutes=mpc_opt['dt']) for i in range(mpc_opt['N'])]
-    ax_gp[0].clear()
-    ax_gp[1].clear()
-    ax_gp[0].plot(gp_times, wind_speeds_gp)
-    ax_gp[0].plot(gp_times, wind_speeds_nwp)
-    ax_gp[0].plot(gp_times, wind_speeds_meas)
-    ax_gp[0].fill_between(gp_times, wind_speeds_gp-chance_constrained_mpc.back_off_factor*std_gp,
-                          wind_speeds_gp+chance_constrained_mpc.back_off_factor*std_gp,
-                          color='tab:blue', alpha=0.4)
-    ax_gp[1].plot(gp_times, wind_power_gp)
-    ax_gp[1].plot(gp_times, wind_power_NWP)
-    ax_gp[1].plot(gp_times, wind_power_meas)
-    ax_gp[1].fill_between(gp_times, wind_power_gp_lb, wind_power_gp_ub,
-                          color='tab:blue', alpha=0.4)
-    ax_gp[0].set_ylabel('Wind speed (m/s)')
-    ax_gp[1].set_ylabel('Wind power (kW)')
-    fig_gp.legend(['GP', 'NWP', 'Measurement'])
+    # wind_power_NWP = np.array([ohps.n_wind_turbines*ohps.wind_turbine.power_curve_fun(
+    #     ohps.wind_turbine.scale_wind_speed(w)) for w in wind_speeds_nwp]).reshape(-1)
+    # wind_speeds_meas = [data_handler.get_measurement(t,i) for i in range(chance_constrained_mpc.horizon)]
+    # wind_power_meas = np.array([ohps.n_wind_turbines*ohps.wind_turbine.power_curve_fun(
+    #     ohps.wind_turbine.scale_wind_speed(w)) for w in wind_speeds_meas]).reshape(-1)
+    # wind_power_gp = np.array([ohps.n_wind_turbines*ohps.wind_turbine.power_curve_fun(
+    #     ohps.wind_turbine.scale_wind_speed(w)) for w in wind_speeds_gp]).reshape(-1)
+    # wind_power_gp_lb = np.array([ohps.n_wind_turbines*ohps.wind_turbine.power_curve_fun(
+    #     ohps.wind_turbine.scale_wind_speed(w)) 
+    #     for w in (np.array(wind_speeds_gp)-chance_constrained_mpc.back_off_factor*np.sqrt(
+    #         np.array(var_gp)))]).reshape(-1)
+    # wind_power_gp_ub = np.array([ohps.n_wind_turbines*ohps.wind_turbine.power_curve_fun(
+    #     ohps.wind_turbine.scale_wind_speed(w)) 
+    #     for w in (np.array(wind_speeds_gp)+chance_constrained_mpc.back_off_factor*np.sqrt(
+    #         np.array(var_gp)))]).reshape(-1)
+    # gp_times = [t + i*datetime.timedelta(minutes=mpc_opt['dt']) for i in range(mpc_opt['N'])]
+    # # ax_gp[0].clear()
+    # ax_gp[1].clear()
+    # ax_gp[0].plot(gp_times, wind_speeds_gp)
+    # ax_gp[0].plot(gp_times, wind_speeds_nwp)
+    # ax_gp[0].plot(gp_times, wind_speeds_meas)
+    # ax_gp[0].fill_between(gp_times, wind_speeds_gp-chance_constrained_mpc.back_off_factor*std_gp,
+    #                       wind_speeds_gp+chance_constrained_mpc.back_off_factor*std_gp,
+    #                       color='tab:blue', alpha=0.4)
+    # ax_gp[1].plot(gp_times, wind_power_gp)
+    # ax_gp[1].plot(gp_times, wind_power_NWP)
+    # ax_gp[1].plot(gp_times, wind_power_meas)
+    # ax_gp[1].fill_between(gp_times, wind_power_gp_lb, wind_power_gp_ub,
+    #                       color='tab:blue', alpha=0.4)
+    # ax_gp[0].set_ylabel('Wind speed (m/s)')
+    # ax_gp[1].set_ylabel('Wind power (kW)')
+    # fig_gp.legend(['GP', 'NWP', 'Measurement'])
     # save data
     P_k = ca.horzcat(P_gtg, P_bat, P_wtg, P_total)
     data_save = {'Power output': P_k, 'Power demand': P_demand[0], 'SOC': SOC_traj[k],

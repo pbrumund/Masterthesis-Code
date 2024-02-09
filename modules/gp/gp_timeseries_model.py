@@ -122,10 +122,10 @@ class TimeseriesModel(WindPredictionGP):
         likelihood = gpf.likelihoods.HeteroskedasticTFPConditional(
             scale_transform=tfp.bijectors.Exp())
         
-        # kernels_nwp_mean = gpf.kernels.SquaredExponential(
-        #     lengthscales=[1]*(n_inputs-2), active_dims=[i for i in range(n_inputs-2)])
+        kernels_nwp_mean = gpf.kernels.SquaredExponential(
+            lengthscales=[1]*(n_inputs-1), active_dims=[i for i in range(n_inputs-1)])
         # kernels_nwp_var = gpf.kernels.SquaredExponential(
-        #     lengthscales=[1]*(n_inputs-2), active_dims=[i for i in range(n_inputs-2)])
+        #     lengthscales=[1]*(n_inputs-1), active_dims=[i for i in range(n_inputs-1)])
         kernels_nwp_mean = gpf.kernels.Sum([
             gpf.kernels.RationalQuadratic(lengthscales=[1], active_dims=[i]) for i in range(n_inputs-1)
         ])
