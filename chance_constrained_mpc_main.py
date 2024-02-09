@@ -183,8 +183,5 @@ for k, t in enumerate(times, start=start):
     v_last = v_opt
     P_gtg_last = P_gtg
     P_demand_last = P_demand
-    # TODO: for simulation: maybe use smaller time scale and vary wind speed for each subinterval 
-    # as wind power is not simply a function of the mean wind speed, 
-    # possibly account for this uncertainty in gp
     plt.pause(0.5)
 pass

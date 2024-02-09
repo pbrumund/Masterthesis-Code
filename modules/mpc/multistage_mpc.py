@@ -17,6 +17,10 @@ class MultistageMPC(MPC):
         self.opt = opt
 
     def generate_scenario(self, start_time, train=False, first_value_known=True):
+        """
+        Use mean of GP posterior, adding pseudo measurements if power uncertainty gets too large
+        Does not work very well as scenarios converge towards prior mean for large horizons
+        """
         certainty_horizon = self.opt['certainty_horizon']   # minimum steps before branching
         robust_horizon = self.opt['robust_horizon'] # maximum step for branching
         max_scenarios = self.opt['max_scenarios']   # maximum number of branches
@@ -118,10 +122,7 @@ class MultistageMPC(MPC):
     def generate_scenario_new(self, start_time, train=False, first_value_known=True):
         """Use average, best and worst case scenarios but keep track of trajectory with 
         pseudo-measurements, branch if difference in generated energy gets too large"""
-        certainty_horizon = self.opt['certainty_horizon']   # minimum steps before branching
-        robust_horizon = self.opt['robust_horizon'] # maximum step for branching
         max_scenarios = self.opt['max_scenarios']   # maximum number of branches
-        branching_interval = self.opt['branching_interval'] # only branch every braching_interval steps
         std_list = self.opt['std_list_multistage'] # number of standard deviations for scenario generation
         norm_factor = sum(norm.pdf(x) for x in std_list) # to keep sum of probabilities at 1
         dE_min = self.opt['dE_min'] # minimum accumulated wind power difference between min and max trajectory for branching
@@ -306,6 +307,7 @@ class MultistageMPC(MPC):
         v_lb = ca.vertcat(*[node.v_lb for node in nodes_flattened])
         v_ub = ca.vertcat(*[node.v_ub for node in nodes_flattened])
         self.get_u_next_fun = ca.Function('get_u_next', [v_vec], [nodes[0][0].u])
+        self.get_s_P_next_fun = ca.Function('get_s_P_next', [v_vec], [nodes[0][0].s_P])
         v_middle = [node.v for node in middle_nodes] # for generating initial guess
         self.get_v_middle_fun = ca.Function('get_v_middle', [v_vec], v_middle)
         g = ca.vertcat(*[node.g for node in nodes_flattened])
@@ -328,6 +330,7 @@ class MultistageMPC(MPC):
         self.J_gtg_dP = sum(node.J_gtg_dP*node.probability for node in nodes_flattened)
         self.J_bat = sum(node.J_bat*node.probability for node in nodes_flattened)
         self.J_s_P = sum(node.J_s_P*node.probability for node in nodes_flattened)
+        self.J_s_x = sum(node.J_s_x*node.probability for node in nodes_flattened)
         self.J_u = sum(node.J_u*node.probability for node in nodes_flattened)
         self.J_fun = ca.Function('J', [v_vec, p], [J])
         self.J_gtg_fun = ca.Function('J_gtg', [v_vec, p], [self.J_gtg])
@@ -337,6 +340,7 @@ class MultistageMPC(MPC):
         self.J_bat_fun = ca.Function('J_bat', [v_vec, p], [self.J_bat])
         self.J_u_fun = ca.Function('J_u', [v_vec, p], [self.J_u])
         self.J_s_P_fun = ca.Function('J_s_P', [v_vec, p], [self.J_s_P])
+        self.J_s_x_fun = ca.Function('J_s_x', [v_vec, p], [self.J_s_x])
         
     def get_initial_guess(self, v_last = None, wind_power_vec = None, x0 = None, 
                           P_demand = None):
@@ -370,7 +374,8 @@ class MultistageMPC(MPC):
                 P_bat = self.ohps.get_P_bat(x_init, u_init, w)
                 P_wtg = self.ohps.get_P_wtg(x_init, u_init, w)
                 s_P_init = P_demand[i] - P_gtg - P_bat - P_wtg
-                v_init_i_k = node.get_v_fun(x_init, u_init, s_P_init)
+                s_x_init = 0
+                v_init_i_k = node.get_v_fun(x_init, u_init, s_P_init, s_x_init)
                 v_init.append(v_init_i_k)
             x_init_list.append(x_init)
             u_init_list.append(u_init)
@@ -391,7 +396,6 @@ class MultistageMPC(MPC):
 
 
 class TreeNode:
-    # TODO: Methods for branching and getting single successor, likelihood
     def __init__(self, ohps: OHPS, time_index, node_index, opt, probability, 
                  predecessor=None, wind_pred=None):
         self.ohps = ohps
@@ -426,17 +430,22 @@ class TreeNode:
         self.s_P = ca.MX.sym(f's_P_{self.time_index}_{self.node_index}')
         self.s_P_lb = -ca.inf
         self.s_P_ub = ca.inf
-        self.v = ca.vertcat(self.u, self.x, self.s_P)
-        self.v_lb = ca.vertcat(self.u_lb, self.x_lb, self.s_P_lb)
-        self.v_ub = ca.vertcat(self.u_ub, self.x_ub, self.s_P_ub)
+        self.s_x = ca.MX.sym(f's_x_{self.time_index}_{self.node_index}')
+        self.s_x_lb = 0
+        self.s_x_ub = ca.inf
+        self.v = ca.vertcat(self.u, self.x, self.s_P, self.s_x)
+        self.v_lb = ca.vertcat(self.u_lb, self.x_lb, self.s_P_lb, self.s_x_lb)
+        self.v_ub = ca.vertcat(self.u_ub, self.x_ub, self.s_P_ub, self.s_x_ub)
         self.get_v_fun = ca.Function(f'get_v_{self.time_index}_{self.node_index}', 
-                                     [self.x, self.u, self.s_P], [self.v])
+                                     [self.x, self.u, self.s_P, self.s_x], [self.v])
         self.get_u_fun = ca.Function(f'get_u_{self.time_index}_{self.node_index}', 
                                      [self.v], [self.u])
         self.get_x_fun = ca.Function(f'get_x_{self.time_index}_{self.node_index}', 
                                      [self.v], [self.x])
         self.get_s_P_fun = ca.Function(f'get_s_P_{self.time_index}_{self.node_index}', 
                                      [self.v], [self.s_P])
+        self.get_s_x_fun = ca.Function(f'get_s_x_{self.time_index}_{self.node_index}',
+                                     [self.v], [self.s_x])
         
     def get_parameters(self):
         self.param = []
@@ -492,6 +501,19 @@ class TreeNode:
         self.constraints.append(g_demand)
         g_lb.append(g_demand_lb)
         g_ub.append(g_demand_ub)
+        if self.opt['use_soft_constraints_state'] and not self.is_root_node:
+            x_next = self.ohps.get_next_state(self.x, self.u)
+            sc_backoff = 0.05
+            x_lb_sc = self.ohps.lbx + sc_backoff
+            x_ub_sc = self.ohps.ubx - sc_backoff
+            g_x_lb = x_lb_sc - x_next - self.s_x
+            g_x_ub = x_next - x_ub_sc - self.s_x
+            self.constraints.append(g_x_lb)
+            g_lb.append(-ca.inf)
+            g_ub.append(0)
+            self.constraints.append(g_x_ub)
+            g_lb.append(-ca.inf)
+            g_ub.append(0)
         self.g_lb = ca.vertcat(*g_lb)
         self.g_ub = ca.vertcat(*g_ub)
         self.g = ca.vertcat(*self.constraints)
@@ -504,7 +526,7 @@ class TreeNode:
         self.P_gtg = self.ohps.gtg.get_power_output(x_gtg, u_gtg, None)
         load = self.P_gtg/self.ohps.P_gtg_max
         self.J_gtg_P = self.opt['param']['k_gtg_P']*load
-        eta_gtg = ca.if_else(load>0.01, alpha_1*load**2 + alpha_2*load, 0)  # TODO: add efficiency to model 
+        eta_gtg = ca.if_else(load>0.01, alpha_1*load**2 + alpha_2*load, 0) 
         eta_max = self.opt['param']['eta_gtg_max']
         self.J_gtg_eta = self.opt['param']['k_gtg_eta']*(eta_gtg-eta_max)**2
         if self.is_root_node:
@@ -522,7 +544,11 @@ class TreeNode:
         self.J_u = self.u.T@self.opt['param']['R_input']@self.u
         self.J_s_P = (self.opt['param']['r_s_P']*(self.s_P)**2/(self.ohps.P_wtg_max+self.ohps.P_gtg_max)
                  *1/(self.time_index+1)**2)
-        self.J = (self.J_gtg+self.J_bat+self.J_u+self.J_s_P)*self.probability
+        if self.opt['use_soft_constraints_state']:
+            self.J_s_x = self.opt['param']['r_s_x']*self.s_x
+        else:
+            self.J_s_x = 0
+        self.J = (self.J_gtg+self.J_bat+self.J_u+self.J_s_P+self.J_s_x)*self.probability
         
         
 

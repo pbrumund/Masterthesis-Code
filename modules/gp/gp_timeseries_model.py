@@ -492,11 +492,6 @@ class TimeseriesModel(WindPredictionGP):
         # x_train_pseudo = torch.cat(self.X_train_timeseries, pseudo_indices)
         # y_train_pseudo = torch.cat(self.y_train_timeseries, pseudo_outputs)
         
-
-
-
-
-
     def plot_prior(self, start_time, steps):
         """Plot predictions of prior GP"""
         times = [start_time+i*datetime.timedelta(minutes=self.opt['dt_meas']) for i in range(steps)]

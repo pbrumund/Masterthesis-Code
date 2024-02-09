@@ -10,6 +10,7 @@ from modules.gp import DataHandler
 from modules.gp import get_gp_opt
 from modules.plotting import TimeseriesPlot
 from modules.mpc_scoring import DataSaving
+from modules.mpc import LowLevelController
 
 ohps = OHPS()
 
@@ -35,6 +36,8 @@ P_traj = ca.DM.zeros(n_times, 5)    # gtg, battery, wtg, total, demand
 SOC_traj = ca.DM.zeros(n_times)
 
 data_handler = DataHandler(datetime.datetime(2020,1,1), datetime.datetime(2022,12,31), gp_opt)
+llc = LowLevelController(ohps, data_handler, mpc_opt)
+
 x_k = ohps.x0
 P_gtg_last = ohps.gtg.bounds['ubu']
 P_demand_last = None
@@ -80,7 +83,7 @@ for k, t in enumerate(times, start=start):
              for w in wind_speeds_nwp]
     wind_speeds = ca.vertcat(*wind_speeds)
     wind_speeds_nwp = ca.vertcat(*wind_speeds_nwp)
-    wind_speeds_nwp[0] = wind_speeds[0] # prefect measurement for first value
+    # wind_speeds_nwp[0] = wind_speeds[0] # prefect measurement for first value
     if P_demand_last is not None:
         P_demand = ca.vertcat(P_demand_last[1:], P_wtg[-1] + 0.8*ohps.P_gtg_max)
     else:
@@ -95,6 +98,11 @@ for k, t in enumerate(times, start=start):
 
     u_opt = nominal_mpc.get_u_from_v_fun(v_opt)
     u_k = u_opt[0,:]
+    s_P_opt = nominal_mpc.get_s_from_v_fun(v_opt)
+    s_P_k = s_P_opt[0]
+    # Simulate with low level controller adding uncertainty to battery
+    i_opt, x_next = llc.simulate(t, x_k, u_k, s_P_k, P_demand[0])
+    u_k[1] = i_opt
 
     # save state, input, SOC and power trajectories
     x_traj[k,:] = x_k
@@ -129,8 +137,6 @@ for k, t in enumerate(times, start=start):
     v_last = v_opt
     P_gtg_last = P_gtg
     P_demand_last = P_demand
-    # TODO: for simulation: maybe use smaller time scale and vary wind speed for each subinterval 
-    # as wind power is not simply a function of the mean wind speed, 
-    # possibly account for this uncertainty in gp
+
     plt.pause(0.1)
 pass
