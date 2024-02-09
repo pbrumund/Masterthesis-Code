@@ -122,10 +122,10 @@ class TimeseriesModel(WindPredictionGP):
         likelihood = gpf.likelihoods.HeteroskedasticTFPConditional(
             scale_transform=tfp.bijectors.Exp())
         
-        # kernels_nwp_mean = gpf.kernels.SquaredExponential(
-        #     lengthscales=[1]*(n_inputs-2), active_dims=[i for i in range(n_inputs-2)])
+        kernels_nwp_mean = gpf.kernels.SquaredExponential(
+            lengthscales=[1]*(n_inputs-1), active_dims=[i for i in range(n_inputs-1)])
         # kernels_nwp_var = gpf.kernels.SquaredExponential(
-        #     lengthscales=[1]*(n_inputs-2), active_dims=[i for i in range(n_inputs-2)])
+        #     lengthscales=[1]*(n_inputs-1), active_dims=[i for i in range(n_inputs-1)])
         kernels_nwp_mean = gpf.kernels.Sum([
             gpf.kernels.RationalQuadratic(lengthscales=[1], active_dims=[i]) for i in range(n_inputs-1)
         ])
@@ -409,7 +409,7 @@ class TimeseriesModel(WindPredictionGP):
             self.gp_timeseries.covar_module.kernel.gamma = 0.5
     
     def predict_trajectory(self, start_time, steps, train=False, pseudo_gp = None, 
-                           include_last_measurement=True):
+                           include_last_measurement=False):
         """
         Set up the timeseries GP and train if required, then predict a number of steps ahead
         returns mean and variance as numpy arrays

@@ -19,14 +19,14 @@ def get_mpc_opt(method='nominal', **kwargs):
         'alpha_2': 0.8,
         'P_gtg_max': 32000,
         'eta_gtg_max': 0.506,
-        'k_gtg_eta': 10,
+        'k_gtg_eta': 20,
         'k_gtg_P': 10,
         'k_gtg_fuel': 0,
         'k_bat': .5,#.1,#.5,
         'R_input': ca.diag([0,1e-8]),# 5e-6
         'r_s_P': 100,
         'r_s_x': 10000,
-        'k_gtg_dP': 5,#5,#.5,
+        'k_gtg_dP': 1,#5,#.5,
         'k_bat_final': 0#500
     }
     opt['param'] = param
