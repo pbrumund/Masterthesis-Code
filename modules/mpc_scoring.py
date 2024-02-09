@@ -12,7 +12,7 @@ def get_filename_save(mpc_name, mpc_opt, gp_opt):
     run_id = hashlib.md5(str(opt_dict).encode('UTF-8')).hexdigest()[:10]
     filename_data = f'data/simulation_runs/{mpc_name}_data_{run_id}.csv'
     filename_times = f'data/simulation_runs/{mpc_name}_times_{run_id}.csv'
-    filename_dict = f'data/simulation_tuns/{mpc_name}_param_{run_id}.csv'
+    filename_dict = f'data/simulation_runs/{mpc_name}_param_{run_id}.json'
     return filename_data, filename_times, filename_dict
 
 def get_power_error(mpc_name, mpc_opt, gp_opt, run_id=None):
@@ -58,8 +58,11 @@ class DataSaving:
             self.filename_data, self.filename_times, filename_opt = get_filename_save(
                 mpc_name, mpc_opt, gp_opt)
             with open(filename_opt, 'w') as fp:
-                json.dump(mpc_opt, fp)
-                json.dump(gp_opt, fp)
+                mpc_opt_sorted = {key: str(mpc_opt[key]) for key in sorted(mpc_opt) if key != 'param'}
+                cost_param_sorted = {key: str(mpc_opt['param'][key]) for key in sorted(mpc_opt['param'])}
+                gp_opt_sorted = {key: str(gp_opt[key]) for key in sorted(gp_opt)}
+                opt_dict = {**mpc_opt_sorted, **cost_param_sorted, **gp_opt_sorted}
+                json.dump(opt_dict, fp, indent=2)
         else:
             self.filename_data = f'data/simulation_runs/{mpc_name}_data_{run_id}.csv'
             self.filename_times = f'data/simulation_runs/{mpc_name}_times_{run_id}.csv'
