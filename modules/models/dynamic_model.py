@@ -220,7 +220,7 @@ class DynamicModel():
         self._integrator = ca.integrator('integrator', 'rk', ode, 0, dt)
 
     def get_next_state(self, x_i, u_i):
-        result = self._integrator(x0=x_i, p=u_i) # TODO: test different integrators
+        result = self._integrator(x0=x_i, p=u_i)
         return result['xf']
     
     def get_power_output(self, x, u, w):
