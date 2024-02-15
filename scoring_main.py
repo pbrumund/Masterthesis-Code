@@ -9,8 +9,8 @@ if __name__ == '__main__':
     from modules.gp.scoring import (get_interval_score, get_mae, get_posterior_trajectories, 
         get_rmse, get_RE, get_trajectory_gp_prior, get_trajectory_measured, get_trajectory_nwp, 
         get_direct_model_trajectories, get_simple_timeseries_traj, get_mape, get_trajectory_gp_prior_homoscedastic)
-
-    opt = get_gp_opt(n_z=400, max_epochs_second_training=20, epochs_timeseries_retrain=500, 
+    n_z = 400
+    opt = get_gp_opt(n_z=n_z, max_epochs_second_training=20, epochs_timeseries_retrain=500, 
                         epochs_timeseries_first_train=500, n_last=36)
     weather_data = load_weather_data(opt['t_start'], opt['t_end'])
 
@@ -25,19 +25,19 @@ if __name__ == '__main__':
         trajectory_nwp = get_trajectory_nwp(weather_data, opt)
         np.savetxt('modules/gp/scoring/trajectory_nwp.csv', trajectory_nwp)
     try:
-        trajectory_gp_prior = np.loadtxt('modules/gp/scoring/trajectory_gp_prior_heteroscedastic_400.csv')
-        var_gp_prior = np.loadtxt('modules/gp/scoring/var_gp_prior_heteroscedastic_400.csv')
+        trajectory_gp_prior = np.loadtxt(f'modules/gp/scoring/trajectory_gp_prior_heteroscedastic_{n_z}.csv')
+        var_gp_prior = np.loadtxt(f'modules/gp/scoring/var_gp_prior_heteroscedastic_{n_z}.csv')
     except:
         trajectory_gp_prior, var_gp_prior = get_trajectory_gp_prior(opt)
-        np.savetxt('modules/gp/scoring/trajectory_gp_prior_heteroscedastic_400.csv', trajectory_gp_prior)
-        np.savetxt('modules/gp/scoring/var_gp_prior_heteroscedastic_400.csv', var_gp_prior)
+        np.savetxt(f'modules/gp/scoring/trajectory_gp_prior_heteroscedastic_{n_z}.csv', trajectory_gp_prior)
+        np.savetxt(f'modules/gp/scoring/var_gp_prior_heteroscedastic_{n_z}.csv', var_gp_prior)
     try:
-        trajectory_gp_prior_homoscedastic = np.loadtxt('modules/gp/scoring/trajectory_gp_prior_homoscedastic_400.csv')
-        var_gp_prior_homoscedastic = np.loadtxt('modules/gp/scoring/var_gp_prior_homoscedastic_400.csv')
+        trajectory_gp_prior_homoscedastic = np.loadtxt(f'modules/gp/scoring/trajectory_gp_prior_homoscedastic_{n_z}.csv')
+        var_gp_prior_homoscedastic = np.loadtxt(f'modules/gp/scoring/var_gp_prior_homoscedastic_{n_z}.csv')
     except:
         trajectory_gp_prior_homoscedastic, var_gp_prior_homoscedastic = get_trajectory_gp_prior_homoscedastic(opt)
-        np.savetxt('modules/gp/scoring/trajectory_gp_prior_homoscedastic_400.csv', trajectory_gp_prior)
-        np.savetxt('modules/gp/scoring/var_gp_prior_homoscedastic_400.csv', var_gp_prior)
+        np.savetxt(f'modules/gp/scoring/trajectory_gp_prior_homoscedastic_{n_z}.csv', trajectory_gp_prior_homoscedastic)
+        np.savetxt(f'modules/gp/scoring/var_gp_prior_homoscedastic_{n_z}.csv', var_gp_prior_homoscedastic)
     rmse_nwp = get_rmse(trajectory_measured, trajectory_nwp)
     mae_nwp = get_mae(trajectory_measured, trajectory_nwp)
 
@@ -64,27 +64,29 @@ if __name__ == '__main__':
 
     percent_in_interval_gp_prior_homoscedastic = np.array(re_gp_prior_homoscedastic) + (1-alpha_vec)
     print(f'RMSE of NWP: {rmse_nwp}, MAE of NWP: {mae_nwp}')
-    print(f'RMSE of GP: {rmse_gp_prior}, MAE of GP: {mae_gp_prior}')
+    print(f'RMSE of heteroscedastic GP: {rmse_gp_prior}, MAE of GP: {mae_gp_prior}')
     print(f'RMSE of homoscedastic GP: {rmse_gp_prior_homoscedastic}, MAE of GP: {mae_gp_prior_homoscedastic}')
 
     plt.figure()
-    plt.plot(np.linspace(0.01,1,100), re_gp_prior)
-    plt.plot(alpha_vec, re_gp_prior_homoscedastic)
+    plt.plot(np.linspace(0.01,1,100), re_gp_prior, label='Heteroscedastic GP')
+    plt.plot(alpha_vec, re_gp_prior_homoscedastic, label='Homoscedastic GP')
     plt.xlabel('alpha')
     plt.ylabel('RE for NWP-based GP')
+    plt.legend()
     plt.figure()
-    plt.plot(np.linspace(0.01,1,100), int_score_gp_prior)
-    plt.plot(alpha_vec, int_score_gp_prior_homoscedastic)
+    plt.plot(np.linspace(0.01,1,100), int_score_gp_prior, label='Heteroscedastic GP')
+    plt.plot(alpha_vec, int_score_gp_prior_homoscedastic, label='Homoscedastic GP')
     plt.xlabel('alpha')
     plt.ylabel('Interval score for NWP-based GP')
+    plt.legend()
     plt.figure()
-    plt.plot(1-alpha_vec, percent_in_interval_gp_prior)
-    plt.plot(1-alpha_vec, percent_in_interval_gp_prior_homoscedastic)
+    plt.plot(1-alpha_vec, percent_in_interval_gp_prior, label='Heteroscedastic GP')
+    plt.plot(1-alpha_vec, percent_in_interval_gp_prior_homoscedastic, label='Homoscedastic GP')
     plt.plot(1-alpha_vec, 1-alpha_vec, '--')
     plt.xlabel('1-alpha')
     plt.ylabel('actual percentage in 1-alpha-interval')
     plt.ylim((0,1))
-    plt.legend(['Heteroscedastic', 'Homoscedastic'])
+    plt.legend()
     plt.pause(1)
     steps_forward = opt['steps_forward']
     rmse_post = np.zeros(steps_forward)
@@ -92,8 +94,9 @@ if __name__ == '__main__':
     re_post = np.zeros(steps_forward)
     score_post = np.zeros(steps_forward)
 
-    trajectories_mean_post, trajectories_var_post = get_posterior_trajectories(opt)
     trajectories_mean_post_simple, trajectories_var_post_simple = get_simple_timeseries_traj(opt)
+    trajectories_mean_post, trajectories_var_post = get_posterior_trajectories(opt)
+    
     # trajectories_mean_post = np.loadtxt('gp/scoring/trajectories_mean_post.csv')
     # trajectories_var_post = np.loadtxt('gp/scoring/trajectories_var_post.csv')
     # first dimension: time of prediction, second dimension: number of steps forward

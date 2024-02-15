@@ -13,11 +13,9 @@ from modules.mpc_scoring import DataSaving
 
 ohps = OHPS()
 
-mpc_opt = get_mpc_opt(N=30)
-t_start = datetime.datetime(2022,1,1)
-t_end = datetime.datetime(2022,12,31)
-mpc_opt['t_start'] = t_start
-mpc_opt['t_end'] = t_end
+mpc_opt = get_mpc_opt(N=30, use_soft_constraints_state=False)
+t_start = mpc_opt['t_start']
+t_end = mpc_opt['t_end']
 # mpc_opt['param']['k_gtg_P'] = 10
 # mpc_opt['param']['k_gtg_eta'] = 50
 # mpc_opt['param']['k_gtg_dP'] = 1
@@ -58,9 +56,7 @@ P_demand_last = None
 #                             title = 'Nominal MPC with perfect forecast, Control inputs')
 # save trajectories to file
 dims = {'Power output': 4, 'Power demand': 1, 'SOC': 1, 'Inputs': 2}
-del mpc_opt['use_soft_constraints_state']
-del mpc_opt['param']['r_s_x']
-mpc_opt['param']['r_s_P'] = 1000
+
 data_saver = DataSaving('nominal_mpc_perfect_forecast', mpc_opt, gp_opt, dims)
 
 # load trajectories if possible
@@ -147,6 +143,6 @@ for k, t in enumerate(times, start=start):
     v_last = v_opt
     P_gtg_last = P_gtg
     P_demand_last = P_demand
-    plt.pause(0.1)
+    # plt.pause(0.1)
 
 pass

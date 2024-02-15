@@ -17,11 +17,13 @@ class LowLevelController:
         # Assume constant P_demand and P_gtg, mimimize tracking error
         w = ca.MX.sym('w', self.n_intervals) # Parameter
         i = ca.MX.sym('i', self.n_intervals) # Optimization variable
+        P_gtg = ca.MX.sym('P_gtg', self.n_intervals) # Optimization variable
         x = ca.MX.sym('x', self.n_intervals+1) # Optimization variable, including x0
         x0 = ca.MX.sym('x0') # Parameter
 
         P_demand = ca.MX.sym('P_demand') # Parameter
-        P_gtg = ca.MX.sym('P_gtg')  # Parameter
+        P_gtg_last = ca.MX.sym('P_gtg_last')  # Parameter
+        P_gtg_init = ca.MX.sym('P_gtg_init')
         s_P = ca.MX.sym('s_P') # Parameter
         P_wtg = [self.ohps.get_P_wtg(x[j], ca.vertcat(P_gtg, i[j]), w[j]) for j in range(self.n_intervals)]
         P_bat = [self.ohps.get_P_bat(x[j], ca.vertcat(P_gtg, i[j]), w[j]) for j in range(self.n_intervals)]
@@ -29,13 +31,15 @@ class LowLevelController:
         P_wtg = ca.vertcat(*P_wtg)
         P_bat = ca.vertcat(*P_bat)
 
-        f = ca.sumsqr(P_demand - P_gtg - P_wtg - P_bat - s_P)
-        v = ca.vertcat(x, i)
+        f = ca.sumsqr(P_demand - P_gtg - P_wtg - P_bat - s_P) + 0.01*ca.sumsqr(P_gtg-P_gtg_init)
+        v = ca.vertcat(x, i, P_gtg)
         v_lb = ca.vertcat(self.ohps.battery.bounds['lbx']*ca.DM.ones(self.n_intervals+1),
-                          self.ohps.battery.bounds['lbu']*ca.DM.ones(self.n_intervals))
+                          self.ohps.battery.bounds['lbu']*ca.DM.ones(self.n_intervals),
+                          self.ohps.gtg.bounds['lbu']*ca.DM.ones(self.n_intervals))
         v_ub = ca.vertcat(self.ohps.battery.bounds['ubx']*ca.DM.ones(self.n_intervals+1),
-                          self.ohps.battery.bounds['ubu']*ca.DM.ones(self.n_intervals))
-        p = ca.vertcat(w, x0, P_demand, P_gtg, s_P)
+                          self.ohps.battery.bounds['ubu']*ca.DM.ones(self.n_intervals),
+                          self.ohps.gtg.bounds['ubu']*ca.DM.ones(self.n_intervals))
+        p = ca.vertcat(w, x0, P_demand, P_gtg_init, P_gtg_last, s_P)
         # ODE constraint
         x_next = [self.ohps.battery.get_next_state(x[j], i[j]) for j in range(self.n_intervals)]
         x_next = ca.vertcat(*x_next)
@@ -49,7 +53,7 @@ class LowLevelController:
         x_init = [x0]
         for j in range(self.n_intervals):
             x_init.append(self.ohps.battery.get_next_state(x_init[j], i_init))
-        v_init = ca.vertcat(i_init*ca.DM.ones(self.n_intervals), *x_init)
+        v_init = ca.vertcat(*x_init, i_init*ca.DM.ones(self.n_intervals), P_gtg_init*ca.DM.ones(self.n_intervals))
         nlp = {
             'x': v,
             'f': f,
@@ -66,16 +70,18 @@ class LowLevelController:
                                   [self._solver(x0=v_init, p=p, lbx=v_lb, ubx=v_ub, lbg=g_lb, ubg=g_ub)['x'], 
                                    self._solver(x0=v_init, p=p, lbx=v_lb, ubx=v_ub, lbg=g_lb, ubg=g_ub)['f'],
                                    self._solver(x0=v_init, p=p, lbx=v_lb, ubx=v_ub, lbg=g_lb, ubg=g_ub)['g']])
-    def simulate(self, t, x_k, u_k, s_P_k, P_demand):
+        # lower GTG output if battery is full
+    def simulate(self, t, x_k, u_k, s_P_k, P_demand, P_gtg_last=25600):
         P_gtg = u_k[0]
         i_init = u_k[1]
         w = self.dh.get_measurement(t)
-        p = ca.vertcat(w, x_k, P_demand, P_gtg, s_P_k)
+        p = ca.vertcat(w, x_k, P_demand, P_gtg, P_gtg_last, s_P_k)
         v_opt, f_opt, g_opt = self.solver(i_init, p)
         P_bat = self.ohps.get_P_bat(x_k, v_opt[self.n_intervals+1],0)
         P_wtg = self.ohps.get_P_wtg(x_k, u_k, w)
         if P_demand - P_gtg - P_wtg - P_bat - s_P_k < -10:
             print('Was ist hier los??????')
         x_opt = v_opt[:self.n_intervals+1]
-        i_opt = v_opt[self.n_intervals+1:]
-        return i_opt[0], x_opt[-1]
+        i_opt = v_opt[self.n_intervals+1:2*self.n_intervals+1]
+        P_gtg_opt = v_opt[2*self.n_intervals+1:]
+        return i_opt[0], P_gtg_opt[0], x_opt[-1]

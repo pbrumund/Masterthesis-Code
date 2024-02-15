@@ -8,6 +8,10 @@ from modules.mpc_scoring import get_power_error, get_gtg_power, get_gtg_emission
 
 
 def get_unsatisfied_demand_accurate(ohps, P_demand_vec, P_wtg_vec):
+    dims = {'Power output': 4, 'Power demand': 1, 'SOC': 1, 'Inputs': 2}
+    ds = DataSaving('baseline_controller', get_mpc_opt(), get_gp_opt(), dims)
+    data, times = ds.load_trajectories()
+    
     import casadi as ca
     ohps.battery.setup_integrator(600)
     x_0 = 0.5
@@ -58,6 +62,7 @@ def get_unsatisfied_demand_accurate(ohps, P_demand_vec, P_wtg_vec):
         print(f'{k}: {SOC_vec[k]}')
     P_unsatisfied_acc = np.sum(P_unsatisfied) 
     E_unsatisfied_rel = P_unsatisfied_acc/np.sum(P_demand_vec)
+    
     return E_unsatisfied_rel, P_gtg_vec, P_bat_vec, SOC_vec
 
 mpc_opt = get_mpc_opt(N=30)
@@ -69,7 +74,7 @@ t_end = datetime.datetime(2022,9,30)
 mpc_opt['t_start'] = t_start
 mpc_opt['t_end'] = t_end
 
-run_ids = ['c46fb39f29', 'b7768c3945', 'e03f688787', '5d9c820706', '053da131da', '5a9b279710', '540c953939']
+run_ids = ['3b0c0d0eb3', '4f0af55c7e', '463cae5633', '1730492995', 'a24a904f3d', 'a91bd79437', 'bee08ddbaf', 'd02bfc4014']
 
 array_dims = {'Power output': 4, 'Power demand': 1, 'SOC': 1, 'Inputs': 2}
 dl = DataSaving('nominal_mpc_perfect_forecast', mpc_opt, gp_opt, array_dims, run_ids[0])
@@ -100,10 +105,10 @@ for run_id in run_ids:
     print(f'GTG power: {P_gtg_abs}, {P_gtg_rel*100}% of total generated power')
     print(f'Mean power demand of GTG: {P_in_gtg}, average efficiency: {eta_gtg}')
 
-import matplotlib.pyplot as plt
-plt.figure()
-times = [t_start+i*datetime.timedelta(minutes=10) for i in range(len(P_wtg))]
-plt.plot(times, np.array([P_wtg, P_bat_vec, P_gtg_vec, P_total, P_demand.reshape((-1))]).T)
-plt.figure()
-plt.plot(SOC_vec)
-pass
+# import matplotlib.pyplot as plt
+# plt.figure()
+# times = [t_start+i*datetime.timedelta(minutes=10) for i in range(len(P_wtg))]
+# plt.plot(times, np.array([P_wtg, P_bat_vec, P_gtg_vec, P_total, P_demand.reshape((-1))]).T)
+# plt.figure()
+# plt.plot(SOC_vec)
+# pass
