@@ -12,17 +12,15 @@ from modules.mpc_scoring import DataSaving
 
 ohps = OHPS()
 
-mpc_opt = get_mpc_opt(N=30)
-t_start = datetime.datetime(2022,1,1)
-t_end = datetime.datetime(2022,12,31)
-mpc_opt['t_start'] = t_start
-mpc_opt['t_end'] = t_end
-mpc_opt['param']['k_gtg_P'] = 0
-mpc_opt['param']['k_gtg_eta'] = 100
-mpc_opt['param']['k_gtg_dP'] = 0
-mpc_opt['param']['k_gtg_fuel'] = 10
-mpc_opt['param']['k_bat'] = 0
-mpc_opt['param']['R_input'] = ca.diag([0,0e-8])
+mpc_opt = get_mpc_opt(N=30, use_soft_constraints_state=False)
+t_start = mpc_opt['t_start']
+t_end = mpc_opt['t_end']
+# mpc_opt['param']['k_gtg_P'] = 10
+# mpc_opt['param']['k_gtg_eta'] = 50
+# mpc_opt['param']['k_gtg_dP'] = 1
+# mpc_opt['param']['k_gtg_fuel'] = 0
+# mpc_opt['param']['k_bat'] = 1
+# mpc_opt['param']['R_input'] = ca.diag([0,1e-8])
 nominal_mpc = NominalMPC(ohps, mpc_opt)
 
 nominal_mpc.get_optimization_problem()
@@ -61,9 +59,7 @@ plt_inputs = TimeseriesPlot('Time', 'Control input', ['Gas turbine power', 'Batt
 fig_E_tot, ax_E_tot = plt.subplots()
 # save trajectories to file
 dims = {'Power output': 4, 'Power demand': 1, 'SOC': 1, 'Inputs': 2}
-del mpc_opt['use_soft_constraints_state']
-del mpc_opt['param']['r_s_x']
-mpc_opt['param']['r_s_P'] = 1000
+
 data_saver = DataSaving('nominal_mpc_perfect_forecast', mpc_opt, gp_opt, dims)
 
 # load trajectories if possible
@@ -96,7 +92,7 @@ for k, t in enumerate(times, start=start):
         P_demand = ca.vertcat(P_demand_last[1:], P_wtg[-1] + 0.8*ohps.P_gtg_max)
     else:
         P_demand = ca.vertcat(*P_wtg) + 0.8*ohps.gtg.bounds['ubu']
-    P_demand = scheduler.get_P_demand(t, x_k, dE)
+    # P_demand = scheduler.get_P_demand(t, x_k, dE)
     # P_demand = 8000*ca.DM.ones(nominal_mpc.horizon)
     p = nominal_mpc.get_p_fun(x_k, P_gtg_last, wind_speeds, P_demand)
 
@@ -137,11 +133,11 @@ for k, t in enumerate(times, start=start):
     plt_inputs.plot(times_plot[:k], u_traj[:k,:])
     plt_power.plot(times_plot[:k], P_traj[:k,:])
     plt_SOC.plot(times_plot[:k], SOC_traj[:k])
-    ax_E_tot.clear()
-    ax_E_tot.plot(times[:k], ca.cumsum(P_traj[:k,-1]/6000))
-    ax_E_tot.plot(times[:k], 40/6*(np.arange(k)+1), '--', color='black')
-    ax_E_tot.set_xlabel('Time')
-    ax_E_tot.set_ylabel('Generated energy (MWh)')
+    # ax_E_tot.clear()
+    # ax_E_tot.plot(times[:k], ca.cumsum(P_traj[:k,-1]/6000))
+    # ax_E_tot.plot(times[:k], 40/6*(np.arange(k)+1), '--', color='black')
+    # ax_E_tot.set_xlabel('Time')
+    # ax_E_tot.set_ylabel('Generated energy (MWh)')
     # save data
     data_save = {'Power output': P_k, 'Power demand': P_demand[0], 'SOC': SOC_traj[k],
                  'Inputs': u_traj[k,:]}

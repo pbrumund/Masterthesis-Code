@@ -183,7 +183,7 @@ if __name__ == '__main__':
     P_generated_max = wind_power_actual + ohps.P_gtg_max
     P_diff_max = P_generated_max - P_demand # maximum charging power/minimum discharging power
     
-    E_bat_max = np.geomspace(1e2,5e5,50)
+    E_bat_max = np.geomspace(1e2,1e6,50)
     P_unsatisfied = np.array([get_unsatisfied_demand(E_bat_max_i) for E_bat_max_i in E_bat_max])
     ax[0].semilogx(E_bat_max/1000, P_unsatisfied*100)
     ax[1].semilogx(E_bat_max/1000, 100-P_unsatisfied/get_unsatisfied_demand(0)*100)
@@ -192,8 +192,9 @@ if __name__ == '__main__':
     P_gtg_nom = (1-reserve_factor)*ohps.P_gtg_max
     P_demand = wind_power_nwp + P_gtg_nom
 
-    # P_unsatisfied_sim = get_unsatisfied_demand_accurate(ohps, P_demand, wind_power_actual)
-    # ax[0].scatter([30], [P_unsatisfied_sim*100])
+    P_unsatisfied_sim = get_unsatisfied_demand_accurate(ohps, P_demand, wind_power_actual)
+    ax[0].scatter([32], [P_unsatisfied_sim[0]*100], color='tab:orange')
+
 
     fig.legend([r'90% base load', r'80% base load', r'70% base load'])#, r'Simulation with 80% base load'])
 

@@ -25,10 +25,8 @@ ohps.setup_integrator(dt=60*mpc_opt['dt'])
 
 multistage_mpc = MultistageMPC(ohps, gp, mpc_opt)
 
-t_start = datetime.datetime(2022,1,1)
-t_end = datetime.datetime(2022,12,31)
-mpc_opt['t_start'] = t_start
-mpc_opt['t_end'] = t_end
+t_start = mpc_opt['t_start']
+t_end = mpc_opt['t_end']
 dt = datetime.timedelta(minutes=mpc_opt['dt'])
 n_times = int((t_end-t_start)/dt)
 times = [t_start + i*dt for i in range(n_times)]
@@ -116,7 +114,8 @@ for k, t in enumerate(times, start=start):
     u_k = multistage_mpc.get_u_next_fun(v_opt)
     s_P_k = multistage_mpc.get_s_P_next_fun(v_opt)
     # Simulate with low level controller adding uncertainty to battery
-    i_opt, x_next = llc.simulate(t, x_k, u_k, s_P_k, P_demand[0])
+    i_opt, P_gtg_opt, x_next = llc.simulate(t, x_k, u_k, s_P_k, P_demand[0])
+    u_k[0] = P_gtg_opt
     u_k[1] = i_opt
 
     # save state, input, SOC and power trajectories
@@ -191,5 +190,5 @@ for k, t in enumerate(times, start=start):
     P_demand_last = P_demand
     
     # plt.pause(0.001)
-    plt.draw()
+    # plt.draw()
 pass

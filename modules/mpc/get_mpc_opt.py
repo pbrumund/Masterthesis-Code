@@ -1,4 +1,5 @@
 import casadi as ca
+import datetime
 def get_mpc_opt(method='nominal', **kwargs):
     opt = {
         'N': 60,    # Prediction horizon (number of steps)
@@ -12,7 +13,9 @@ def get_mpc_opt(method='nominal', **kwargs):
         'use_chance_constraints_multistage': False,
         'std_list_multistage': (-1,0,1),
         'use_simple_scenarios': False,
-        'use_soft_constraints_state': False
+        'use_soft_constraints_state': True,
+        't_start': datetime.datetime(2022,1,1),
+        't_end': datetime.datetime(2022,12,31,23,50)
     }
     param = {
         'alpha_1': -0.4,
