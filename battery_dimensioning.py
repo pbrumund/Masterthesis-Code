@@ -192,10 +192,10 @@ if __name__ == '__main__':
     P_gtg_nom = (1-reserve_factor)*ohps.P_gtg_max
     P_demand = wind_power_nwp + P_gtg_nom
 
-    P_unsatisfied_sim = get_unsatisfied_demand_accurate(ohps, P_demand, wind_power_actual)
-    ax[0].scatter([30], [P_unsatisfied_sim*100])
+    # P_unsatisfied_sim = get_unsatisfied_demand_accurate(ohps, P_demand, wind_power_actual)
+    # ax[0].scatter([30], [P_unsatisfied_sim*100])
 
-    fig.legend([r'90% base load', r'80% base load', r'70% base load', r'Simulation with 80% base load'])
+    fig.legend([r'90% base load', r'80% base load', r'70% base load'])#, r'Simulation with 80% base load'])
 
     plt.show()
     pass
