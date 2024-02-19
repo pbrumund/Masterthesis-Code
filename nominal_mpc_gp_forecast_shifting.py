@@ -17,7 +17,7 @@ ohps = OHPS()
 
 mpc_opt = get_mpc_opt(N=30)
 mpc_opt['param']['k_dP'] = 50
-mpc_opt['param']['k_gtg_dP'] = 5
+mpc_opt['param']['k_gtg_dP'] = 20
 mpc_opt['param']['r_s_E'] = 10000
 nominal_mpc = NominalMPCLoadShifting(ohps, mpc_opt)
 nominal_mpc.get_optimization_problem()
@@ -85,6 +85,8 @@ if values is not None:
     P_out_last = P_out[-1,-1]
     P_gtg_last = P_out[-1,0]
     E_tot = ca.sum1(P_traj[:,-2]/6)
+    E_sched = ca.sum1(P_traj[:,-1])
+
 
 for k, t in enumerate(times, start=start):
     # get parameters: predicted wind speed, power demand, initial state
