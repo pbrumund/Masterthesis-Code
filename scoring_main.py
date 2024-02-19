@@ -9,7 +9,7 @@ if __name__ == '__main__':
     from modules.gp.scoring import (get_interval_score, get_mae, get_posterior_trajectories, 
         get_rmse, get_RE, get_trajectory_gp_prior, get_trajectory_measured, get_trajectory_nwp, 
         get_direct_model_trajectories, get_simple_timeseries_traj, get_mape, get_trajectory_gp_prior_homoscedastic)
-    n_z = 400
+    n_z = 25
     opt = get_gp_opt(n_z=n_z, max_epochs_second_training=20, epochs_timeseries_retrain=500, 
                         epochs_timeseries_first_train=500, n_last=36)
     weather_data = load_weather_data(opt['t_start'], opt['t_end'])
