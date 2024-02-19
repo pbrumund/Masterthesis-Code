@@ -328,9 +328,9 @@ from modules.gp.fileloading import load_weather_data
 from modules.gp import get_gp_opt
 from modules.gp.scoring import (get_interval_score, get_mae, get_posterior_trajectories, get_rmse, 
     get_RE, get_trajectory_gp_prior, get_trajectory_measured, get_trajectory_nwp, 
-    get_direct_model_trajectories, get_simple_timeseries_traj)
+    get_direct_model_trajectories, get_simple_timeseries_traj, get_trajectory_gp_prior_homoscedastic)
 
-opt = get_gp_opt(n_z=200, max_epochs_second_training=10, epochs_timeseries_retrain=500, 
+opt = get_gp_opt(n_z=100, max_epochs_second_training=20, epochs_timeseries_retrain=500, 
                     epochs_timeseries_first_train=500)
 weather_data = load_weather_data(opt['t_start'], opt['t_end'])
 
@@ -345,8 +345,8 @@ except:
     trajectory_nwp = get_trajectory_nwp(weather_data, opt)
     np.savetxt('modules/gp/scoring/trajectory_nwp.csv', trajectory_nwp)
 try:
-    trajectory_gp_prior = np.loadtxt('modules/gp/scoring/trajectory_gp_prior_heteroscedastic_200.csv')
-    var_gp_prior = np.loadtxt('modules/gp/scoring/var_gp_prior_heteroscedastic_200.csv')
+    trajectory_gp_prior = np.loadtxt('modules/gp/scoring/trajectory_gp_prior_heteroscedastic_100.csv')
+    var_gp_prior = np.loadtxt('modules/gp/scoring/var_gp_prior_heteroscedastic_100.csv')
 except:
     trajectory_gp_prior, var_gp_prior = get_trajectory_gp_prior(weather_data, opt)
     np.savetxt('modules/gp/scoring/trajectory_gp_prior.csv', trajectory_gp_prior)
@@ -400,10 +400,10 @@ except:
     trajectory_nwp = get_trajectory_nwp(weather_data, opt)
     np.savetxt('modules/gp/scoring/trajectory_nwp.csv', trajectory_nwp)
 try:
-    trajectory_gp_prior = np.loadtxt('modules/gp/scoring/trajectory_gp_prior_heteroscedastic_200.csv')
-    var_gp_prior = np.loadtxt('modules/gp/scoring/var_gp_prior_heteroscedastic_200.csv')
-    trajectory_gp_prior_homoscedastic = np.loadtxt('modules/gp/scoring/trajectory_gp_prior_homoscedastic.csv')
-    var_gp_prior_homoscedastic = np.loadtxt('modules/gp/scoring/var_gp_prior_homoscedastic.csv')
+    trajectory_gp_prior = np.loadtxt('modules/gp/scoring/trajectory_gp_prior_heteroscedastic_100.csv')
+    var_gp_prior = np.loadtxt('modules/gp/scoring/var_gp_prior_heteroscedastic_100.csv')
+    trajectory_gp_prior_homoscedastic = np.loadtxt('modules/gp/scoring/trajectory_gp_prior_homoscedastic_100.csv')
+    var_gp_prior_homoscedastic = np.loadtxt('modules/gp/scoring/var_gp_prior_homoscedastic_100.csv')
 except:
     trajectory_gp_prior, var_gp_prior = get_trajectory_gp_prior(weather_data, opt)
     np.savetxt('modules/gp/scoring/trajectory_gp_prior.csv', trajectory_gp_prior)
@@ -587,18 +587,128 @@ handles, labels = ax.get_legend_handles_labels()
 fig.legend(handles, labels, loc='upper center', ncol=2, bbox_to_anchor=(.5,1.1))
 fig.set_size_inches(12*cm, 10*cm)
 plt.savefig('../Abbildungen/timeseries_gp_vs_simple.pgf', bbox_inches='tight')
+
+rmse_list_heteroscedastic = []
+mae_list_heteroscedastic = []
+re_list_heteroscedastic = []
+score_list_heteroscedastic = []
+rmse_list_homoscedastic = []
+mae_list_homoscedastic = []
+re_list_homoscedastic = []
+score_list_homoscedastic = []
+for n_z in (10,25,50,100,200,400):
+    opt = get_gp_opt(n_z=n_z, max_epochs_second_training=20, epochs_timeseries_retrain=500, 
+                        epochs_timeseries_first_train=500, n_last=36)
+    weather_data = load_weather_data(opt['t_start'], opt['t_end'])
+
+    try:
+        trajectory_measured = np.loadtxt('modules/gp/scoring/trajectory_meas.csv')
+    except:
+        trajectory_measured = get_trajectory_measured(weather_data, opt)
+        np.savetxt('modules/gp/scoring/trajectory_meas.csv', trajectory_measured)
+    try:
+        trajectory_nwp = np.loadtxt('modules/gp/scoring/trajectory_nwp.csv')
+    except:
+        trajectory_nwp = get_trajectory_nwp(weather_data, opt)
+        np.savetxt('modules/gp/scoring/trajectory_nwp.csv', trajectory_nwp)
+    try:
+        trajectory_gp_prior = np.loadtxt(f'modules/gp/scoring/trajectory_gp_prior_heteroscedastic_{n_z}.csv')
+        var_gp_prior = np.loadtxt(f'modules/gp/scoring/var_gp_prior_heteroscedastic_{n_z}.csv')
+    except:
+        trajectory_gp_prior, var_gp_prior = get_trajectory_gp_prior(opt)
+        np.savetxt(f'modules/gp/scoring/trajectory_gp_prior_heteroscedastic_{n_z}.csv', trajectory_gp_prior)
+        np.savetxt(f'modules/gp/scoring/var_gp_prior_heteroscedastic_{n_z}.csv', var_gp_prior)
+    try:
+        trajectory_gp_prior_homoscedastic = np.loadtxt(f'modules/gp/scoring/trajectory_gp_prior_homoscedastic_{n_z}.csv')
+        var_gp_prior_homoscedastic = np.loadtxt(f'modules/gp/scoring/var_gp_prior_homoscedastic_{n_z}.csv')
+    except:
+        trajectory_gp_prior_homoscedastic, var_gp_prior_homoscedastic = get_trajectory_gp_prior_homoscedastic(opt)
+        np.savetxt(f'modules/gp/scoring/trajectory_gp_prior_homoscedastic_{n_z}.csv', trajectory_gp_prior_homoscedastic)
+        np.savetxt(f'modules/gp/scoring/var_gp_prior_homoscedastic_{n_z}.csv', var_gp_prior_homoscedastic)
+    rmse_nwp = get_rmse(trajectory_measured, trajectory_nwp)
+    mae_nwp = get_mae(trajectory_measured, trajectory_nwp)
+
+    rmse_gp_prior = get_rmse(trajectory_measured, trajectory_gp_prior)
+    mae_gp_prior = get_mae(trajectory_measured, trajectory_gp_prior)
+    rmse_list_heteroscedastic.append(rmse_gp_prior)
+    mae_list_heteroscedastic.append(mae_gp_prior)
+
+    alpha_vec = np.linspace(0.01,1,100)
+    re_gp_prior = [get_RE(alpha, trajectory_measured, trajectory_gp_prior, var_gp_prior)
+                    for alpha in alpha_vec]
+    int_score_gp_prior = [get_interval_score(alpha, trajectory_measured, trajectory_gp_prior, var_gp_prior)
+                    for alpha in alpha_vec]
+    re_list_heteroscedastic.append(np.array(re_gp_prior))
+    score_list_heteroscedastic.append(np.array(int_score_gp_prior))
+    percent_in_interval_gp_prior = np.array(re_gp_prior) + (1-alpha_vec) 
+    #mape_gp_prior = get_mape(trajectory_measured, trajectory_gp_prior)
+
+    rmse_gp_prior_homoscedastic = get_rmse(trajectory_measured, trajectory_gp_prior_homoscedastic)
+    mae_gp_prior_homoscedastic = get_mae(trajectory_measured, trajectory_gp_prior_homoscedastic)
+
+    alpha_vec = np.linspace(0.01,1,100)
+    re_gp_prior_homoscedastic = [get_RE(alpha, trajectory_measured, trajectory_gp_prior_homoscedastic, var_gp_prior_homoscedastic)
+                    for alpha in alpha_vec]
+    int_score_gp_prior_homoscedastic = [get_interval_score(alpha, trajectory_measured, trajectory_gp_prior_homoscedastic, var_gp_prior_homoscedastic)
+                    for alpha in alpha_vec]
+
+    percent_in_interval_gp_prior_homoscedastic = np.array(re_gp_prior_homoscedastic) + (1-alpha_vec)
+    rmse_list_homoscedastic.append(rmse_gp_prior_homoscedastic)
+    mae_list_homoscedastic.append(mae_gp_prior_homoscedastic)
+    re_list_homoscedastic.append(re_gp_prior_homoscedastic)
+    score_list_homoscedastic.append(int_score_gp_prior_homoscedastic)
+    print(f'RMSE of NWP: {rmse_nwp}, MAE of NWP: {mae_nwp}')
+    print(f'RMSE of heteroscedastic GP with {n_z} inducing vars: {rmse_gp_prior}, MAE of GP: {mae_gp_prior}')
+    print(f'RMSE of homoscedastic GP with {n_z} inducing vars: {rmse_gp_prior_homoscedastic}, MAE of GP: {mae_gp_prior_homoscedastic}')
+
+fig, axs = plt.subplots(1,2, layout='constrained', sharey=True)
+handles = []
+for i, color in enumerate(['tab:blue', 'tab:orange', 'tab:green', 'tab:red', 'tab:purple', 'tab:brown']):
+    handle, = axs[0].plot(alpha_vec, re_list_heteroscedastic[i], color=color)
+    handles.append(handle)
+    axs[1].plot(alpha_vec, re_list_homoscedastic[i], color=color)
+    axs[0].set_xlabel(r'$\alpha$')
+    axs[1].set_xlabel(r'$\alpha$')
+    axs[0].grid()
+    axs[1].grid()
+    axs[0].set_ylabel('RE')
+    # axs[1].plot(alpha_vec, score_list_heteroscedastic[i], color=color)
+    # axs[1].plot(alpha_vec, score_list_homoscedastic[i], '--', color=color)
+    # axs[1].set_xlabel('alpha')
+    # axs[1].set_ylabel('Interval score')
+fig.legend(handles=handles, labels=['$n_z$=10', '25', '50', '100', '200', '400'], loc='upper center', 
+           ncol=6, bbox_to_anchor=(.5,1.15))
+fig.set_size_inches(12*cm, 7*cm)
+plt.savefig('../Abbildungen/prior_gp_nz.pgf', bbox_inches='tight')
+fig, axs = plt.subplots(1,2, layout='constrained')
+axs[0].plot([10,25,50,100,200,400], rmse_list_heteroscedastic, marker='x')
+axs[0].plot([10,25,50,100,200,400], rmse_list_homoscedastic, marker='o')
+axs[1].plot([10,25,50,100,200,400], mae_list_heteroscedastic, marker='x')
+axs[1].plot([10,25,50,100,200,400], mae_list_homoscedastic, marker='o')
+#axs[].xaxis.set_major_locator(mticker.FixedLocator([10,25,50,100,200,400]))
+#axs[0].xaxis.set_major_locator(mticker.FixedLocator([10,25,50,100,200,400]))
+axs[0].grid()
+axs[1].grid()
+axs[0].set_xlabel('Number of inducing points')
+axs[0].set_ylabel('RMSE (m/s)')
+axs[1].set_xlabel('Number of inducing points')
+axs[1].set_ylabel('MAE (m/s)')
+fig.legend(['Heteroscedastic', 'Homoscedastic'], loc='upper center', ncol=2, bbox_to_anchor=(0.5,1.15))
+fig.set_size_inches(15*cm, 7*cm)
+plt.savefig('../Abbildungen/heteroscedastic_vs_homoscedastic_nz_mae.pgf', bbox_inches='tight')
 """Power curve"""
-# from modules.models.ohps import OHPS
-# ohps = OHPS()
-# wind_speeds = np.linspace(0,30,100)
-# power_outputs = np.array([ohps.wind_turbine.power_curve_fun(w) for w in wind_speeds]).reshape(-1)
-# fig = plt.figure()
-# ax = plt.axes()
-# ax.plot(wind_speeds, power_outputs)
-# ax.set_xlabel('Wind speed at hub height (m/s)')
-# ax.set_ylabel('Power output (kW)')
-# fig.set_size_inches(10*cm,7*cm)
-# plt.savefig('../Abbildungen/power_curve.pgf', bbox_inches='tight')
+from modules.models.ohps import OHPS
+ohps = OHPS()
+wind_speeds = np.linspace(0,30,100)
+power_outputs = np.array([ohps.wind_turbine.power_curve_fun(w) for w in wind_speeds]).reshape(-1)
+fig = plt.figure()
+ax = plt.axes()
+ax.plot(wind_speeds, power_outputs)
+ax.set_xlabel('Wind speed at hub height (m/s)')
+ax.set_ylabel('Power output (kW)')
+ax.grid()
+fig.set_size_inches(10*cm,7*cm)
+plt.savefig('../Abbildungen/power_curve.pgf', bbox_inches='tight')
 
 
 pass

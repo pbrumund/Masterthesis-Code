@@ -17,11 +17,11 @@ t_start = datetime.datetime(2022,1,1)
 t_end = datetime.datetime(2022,12,31)
 mpc_opt['t_start'] = t_start
 mpc_opt['t_end'] = t_end
-mpc_opt['param']['k_gtg_P'] = 0
-mpc_opt['param']['k_gtg_eta'] = 0
-mpc_opt['param']['k_gtg_dP'] = 0.1
-mpc_opt['param']['k_gtg_fuel'] = 10
-mpc_opt['param']['k_bat'] = 1
+mpc_opt['param']['k_gtg_P'] = 10
+mpc_opt['param']['k_gtg_eta'] = 20
+mpc_opt['param']['k_gtg_dP'] = 1
+mpc_opt['param']['k_gtg_fuel'] = 0
+mpc_opt['param']['k_bat'] = 0.5
 mpc_opt['param']['k_dP'] = 20
 mpc_opt['param']['r_s_E'] = 10000
 mpc_opt['param']['R_input'] = ca.diag([0,1e-8])
@@ -66,9 +66,6 @@ plt_inputs = TimeseriesPlot('Time', 'Control input', ['Gas turbine power', 'Batt
 fig_E_tot, ax_E_tot = plt.subplots()
 # save trajectories to file
 dims = {'Power output': 4, 'Power demand': 1, 'SOC': 1, 'Inputs': 2}
-del mpc_opt['use_soft_constraints_state']
-del mpc_opt['param']['r_s_x']
-mpc_opt['param']['r_s_P'] = 1000
 data_saver = DataSaving('nominal_mpc_perfect_forecast_shifting', mpc_opt, gp_opt, dims)
 
 # load trajectories if possible
@@ -92,6 +89,7 @@ if values is not None:
     x_k = x[-1]
     P_out_last = P_out[-1,-1]
     P_gtg_last = P_out[-1,0]
+    E_tot = ca.sum1(P_traj[:,-2]/6)
 
 for k, t in enumerate(times, start=start):
     # get parameters: predicted wind speed, power demand, initial state
