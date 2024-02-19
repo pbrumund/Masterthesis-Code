@@ -208,7 +208,7 @@ class HomoscedasticTimeseriesModel(WindPredictionGP):
                     break
                 if self.opt['verbose']:# and i%20==0:
                     print(f"Epoch {i} - Loss: {loss_fn().numpy() : .4f}")
-                if (i+1)%10==0 and reselect_data:
+                if (i+1)%10==0 and reselect_data or i>150:
                     training_subset = random.sample(range(n_samples), n_train_1)
                     training_step, loss_fn = self.get_training_step(
                         X_train[training_subset,:], y_train[training_subset,:])
@@ -232,7 +232,7 @@ class HomoscedasticTimeseriesModel(WindPredictionGP):
             
             max_epochs = self.opt['max_epochs_second_training']
             loss_lb = self.opt['loss_lb']
-            for i in range(max_epochs+1):
+            for i in range(max_epochs):
                 try:
                     training_step()
                 except:
