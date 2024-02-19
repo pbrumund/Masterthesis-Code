@@ -180,6 +180,7 @@ class NominalMPCLoadShifting(NominalMPC):
         g_lb = []
         g_ub = []
         P_sum = 0
+        P_out = []
         for i in range(self.horizon):
             #X_mat[i,:] = x_i+1, U_mat[i,:] = u_i
             if i == 0:
@@ -202,6 +203,7 @@ class NominalMPCLoadShifting(NominalMPC):
             P_bat = self.ohps.get_P_bat(x_i, u_i, wind_speeds[i])
             P_wtg = self.ohps.get_P_wtg(x_i, u_i, wind_speeds[i])
             P_sum += P_gtg + P_wtg + P_bat
+            P_out.append(P_gtg + P_wtg + P_bat)
             g_demand = P_min - P_gtg - P_bat - P_wtg
             g_demand_lb = -ca.inf
             g_demand_ub = 0
@@ -231,7 +233,9 @@ class NominalMPCLoadShifting(NominalMPC):
         g = ca.vertcat(*g)
         g_lb = ca.vertcat(*g_lb)
         g_ub = ca.vertcat(*g_ub)
+        P_out = ca.vertcat(*P_out)
         self.g_fun = ca.Function('constraints', [v, p], [g], ['v', 'p'], ['g']) 
+        self.P_out_fun = ca.Function('get_P_sched', [v, p], [P_out])
         return g, g_lb, g_ub
     
     def get_initial_guess(self, p, v_last = None):

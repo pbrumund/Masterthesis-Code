@@ -17,7 +17,7 @@ plt.rcParams.update({
 t_start_mpc = datetime.datetime(2022,1,1)
 t_end_mpc = datetime.datetime(2022,12,31)
 
-mpc_opt = get_mpc_opt(N=30, t_start=t_start_mpc, t_end=t_end_mpc)
+mpc_opt = get_mpc_opt(N=30, t_start=t_start_mpc, t_end=t_end_mpc, use_soft_constraints_state=False)
 gp_opt = get_gp_opt(dt_pred = mpc_opt['dt'])
 array_dims = {'Power output': 4, 'Power demand': 1, 'SOC': 1, 'Inputs': 2}
 
@@ -28,11 +28,12 @@ data_nmpcpf, times_nmpcpf = dl.load_trajectories()
 
 """Nominal MPC with NWP forecast"""
 gp_opt = get_gp_opt(dt_pred = mpc_opt['dt'])
+mpc_opt['use_soft_constraints_state'] = True
 dl = DataSaving('nominal_mpc_nwp_forecast', mpc_opt, gp_opt, array_dims)
 data_nmpcnwpf, times_nmpcnwpf = dl.load_trajectories()
 
 """Nominal MPC with GP forecast"""
-gp_opt = get_gp_opt(dt_pred = mpc_opt['dt'], steps_forward = mpc_opt['N'])
+gp_opt = get_gp_opt(dt_pred = mpc_opt['dt'], steps_forward = mpc_opt['N'], verbose=False)
 dl = DataSaving('nominal_mpc_gp_forecast', mpc_opt, gp_opt, array_dims)
 data_nmpcgpf, times_nmpcgpf = dl.load_trajectories()
 
@@ -59,8 +60,9 @@ data_msmpcmb, times_msmpcmb = dl.load_trajectories()
 data_list = [data_nmpcpf, data_nmpcnwpf, data_nmpcgpf, data_ccmpc, data_msmpcsc, data_msmpcmb]
 times_list = [times_nmpcpf, times_nmpcnwpf, times_nmpcgpf, times_ccmpc, times_msmpcsc, times_msmpcmb]
 
-t_start_plot = datetime.datetime(2022,1,18)
-t_end_plot = datetime.datetime(2022,1,19)
+t_start_plot = datetime.datetime(2022,1,14)
+t_end_plot = t_start_plot + datetime.timedelta(days=1)
+#t_end_plot = datetime.datetime(2022,12,8)
 
 fig = plt.figure(layout='constrained')
 subfigs = fig.subfigures(3,1)
