@@ -19,23 +19,30 @@ class NominalMPCLoadShifting(NominalMPC):
         X_lb = ca.DM.ones(self.horizon)@self.ohps.lbx.T
         X_ub = ca.DM.ones(self.horizon)@self.ohps.ubx.T
         # Soft constraint on total energy
+        # Terminal constraint
         s_E = ca.MX.sym('s_E')
         s_E_lb = 0
         s_E_ub = ca.inf
+        # Path constraint
+        s_E_path = ca.MX.sym('s_E_path', self.horizon)
+        s_E_path_lb = ca.DM.zeros(self.horizon)
+        s_E_path_ub = ca.inf*ca.DM.ones(self.horizon)
+        # State constraints to ensure battery reserve for llc
         s_x = ca.MX.sym('s_xl', self.horizon) # for x + s_x >= x_lb_sc, x - s_x <= x_ub_sc
         s_x_lb = ca.DM.zeros(self.horizon)
         s_x_ub = ca.inf*ca.DM.ones(self.horizon)
-        v = ca.vertcat(U_mat.reshape((-1,1)), X_mat.reshape((-1,1)), s_E, s_x)
+        v = ca.vertcat(U_mat.reshape((-1,1)), X_mat.reshape((-1,1)), s_E, s_E_path, s_x)
         
         self.get_u_from_v_fun = ca.Function('get_u_from_v', [v], [U_mat], ['v'], ['U_mat'])
         self.get_x_from_v_fun = ca.Function('get_x_from_v', [v], [X_mat], ['v'], ['X_mat'])
         self.get_s_from_v_fun = ca.Function('get_s_from_v', [v], [s_E], ['v'], ['s_P'])
         self.get_s_x_from_v_fun = ca.Function('get_s_x_from_v', [v], [s_x], ['v'], ['s_xl'])
-        self.get_v_fun = ca.Function('get_v', [U_mat, X_mat, s_E, s_x], [v], 
-                                     ['U_mat', 'X_mat', 's_P', 's_x'], ['v'])
+        self.get_s_E_path_from_v_fun = ca.Function('get_s_E_path_from_v', [v], [s_E_path], ['v'], ['s_E_path'])
+        self.get_v_fun = ca.Function('get_v', [U_mat, X_mat, s_E, s_E_path, s_x], [v], 
+                                     ['U_mat', 'X_mat', 's_E', 's_E_path', 's_x'], ['v'])
 
-        v_lb = self.get_v_fun(U_lb, X_lb, s_E_lb, s_x_lb)
-        v_ub = self.get_v_fun(U_ub, X_ub, s_E_ub, s_x_ub)
+        v_lb = self.get_v_fun(U_lb, X_lb, s_E_lb, s_E_path_lb, s_x_lb)
+        v_ub = self.get_v_fun(U_ub, X_ub, s_E_ub, s_E_path_ub, s_x_ub)
         return v, v_lb, v_ub
 
     def get_optimization_parameters(self):
@@ -49,7 +56,9 @@ class NominalMPCLoadShifting(NominalMPC):
         wind_speeds = ca.MX.sym('wind_speed', self.horizon)
         E_target = ca.MX.sym('E_target')
         P_min = ca.MX.sym('P_min')
-        p = ca.vertcat(x0, P_gtg_0, P_out_0, wind_speeds, E_target, P_min)
+        E_target_path = ca.MX.sym('E_target_path', self.horizon)
+        E_backoff = ca.MX.sym('E_backoff')
+        p = ca.vertcat(x0, P_gtg_0, P_out_0, wind_speeds, E_target, P_min, E_target_path, E_backoff)
         self.get_x0_fun = ca.Function('get_x0', [p], [x0], ['p'], ['x0'])
         self.get_P_gtg_0_fun = ca.Function('get_P_gtg_0', [p], [P_gtg_0], ['p'], ['P_gtg_0'])
         self.get_P_out_last_fun = ca.Function('get_P_out_0', [p], [P_out_0], ['p'], ['P_out_0'])
@@ -57,11 +66,13 @@ class NominalMPCLoadShifting(NominalMPC):
                                               ['p'], ['wind_speeds'])
         self.get_E_target_fun = ca.Function('get_E_target', [p], [E_target], ['p'], ['P_demand'])
         self.get_P_min_fun = ca.Function('get_P_min', [p], [P_min], ['p'], ['P_min'])
-        self.get_p_fun = ca.Function('get_p', [x0, P_gtg_0, P_out_0, wind_speeds, E_target, P_min], [p], 
-                                     ['x0', 'P_gtg_last', 'P_out_last', 'wind_speeds', 'E_target', 'P_min'], ['p'])
+        self.get_E_target_path_fun = ca.Function('get_E_target_path', [p], [E_target_path], ['p'], ['E_target_path'])
+        self.get_E_backoff_fun = ca.Function('get_E_backoff', [p], [E_backoff], ['p'], ['E_backoff'])
+        self.get_p_fun = ca.Function('get_p', [x0, P_gtg_0, P_out_0, wind_speeds, E_target, P_min, E_target_path, E_backoff], [p], 
+                                     ['x0', 'P_gtg_last', 'P_out_last', 'wind_speeds', 'E_target', 'P_min', 'E_target_path', 'E_backoff'], ['p'])
         return p
 
-    def stage_cost(self, state, input, P_gtg_last, P_out, P_out_last, s_x = None):
+    def stage_cost(self, state, input, P_gtg_last, P_out, P_out_last, s_x = None, s_E = None):
         # P_gtg_last = None
         x_gtg = self.ohps.get_x_gtg(state)
         u_gtg = self.ohps.get_u_gtg(input)
@@ -84,6 +95,10 @@ class NominalMPCLoadShifting(NominalMPC):
             J_s_x = self.param['r_s_x']*s_x
         else:
             J_s_x = 0
+        if self.opt['use_path_constraints_energy']:
+            J_s_E = self.param['r_s_E']*(s_E/200000)**2
+        else:
+            J_s_E = 0
         # J_gtg_dP = self.param['k_gtg_dP']*ca.log(100*ca.fabs(u_gtg)/self.ohps.gtg.bounds['ubu']+1)
         # J_gtg += J_gtg_dP
         if P_gtg_last is not None:
@@ -100,7 +115,7 @@ class NominalMPCLoadShifting(NominalMPC):
         self.J_bat_i = J_bat
         self.J_u_i = J_u
         self.J_s_x_i = J_s_x
-        return J_gtg + J_bat + J_u + J_dP + J_s_x
+        return J_gtg + J_bat + J_u + J_dP + J_s_x + J_s_E
     
     def cost_function(self, v, p):
         """Return the cost function depending on the optimization variable and the parameters"""
@@ -108,6 +123,7 @@ class NominalMPCLoadShifting(NominalMPC):
         X_mat = self.get_x_from_v_fun(v)
         U_mat = self.get_u_from_v_fun(v)
         s_x = self.get_s_x_from_v_fun(v)
+        s_E_path = self.get_s_E_path_from_v_fun(v)
         # get initial state from parameters
         x0 = self.get_x0_fun(p)
         P_gtg_last = self.get_P_gtg_0_fun(p)
@@ -122,11 +138,12 @@ class NominalMPCLoadShifting(NominalMPC):
                 x_i = X_mat[i-1,:]
             u_i = U_mat[i,:].T
             s_x_i = s_x[i]
+            s_E_i = s_E_path[i]
             P_gtg_i = self.ohps.get_P_gtg(x_i, u_i, wind_speeds[i])
             P_bat_i = self.ohps.get_P_bat(x_i, u_i, wind_speeds[i])
             P_wtg_i = self.ohps.get_P_wtg(x_i, u_i, wind_speeds[i])
             P_out_i = P_gtg_i + P_wtg_i + P_bat_i
-            J += self.stage_cost(x_i, u_i, P_gtg_last, P_out_i, P_out_last, s_x_i)
+            J += self.stage_cost(x_i, u_i, P_gtg_last, P_out_i, P_out_last, s_x_i, s_E_i)
             # Parameter tuning
             self.J_gtg += self.J_gtg_i
             self.J_gtg_P += self.J_gtg_P_i
@@ -146,8 +163,7 @@ class NominalMPCLoadShifting(NominalMPC):
         self.J_bat += J_bat
         J += J_bat
         s_E = self.get_s_from_v_fun(v)
-        E_target = self.get_E_target_fun(p)
-        J_dE = self.param['r_s_E']*s_E/E_target
+        J_dE = self.param['r_s_E']*(s_E/200000)**2
         J += J_dE
         self.J_s_E = J_dE
         # Parameter tuning
@@ -170,11 +186,14 @@ class NominalMPCLoadShifting(NominalMPC):
         X_mat = self.get_x_from_v_fun(v)
         U_mat = self.get_u_from_v_fun(v)
         s_E = self.get_s_from_v_fun(v)
+        s_E_path = self.get_s_E_path_from_v_fun(v)
         # get initial state, wind speed and power demand from parameters
         x0 = self.get_x0_fun(p)
         wind_speeds = self.get_wind_speed_fun(p)
         P_min = self.get_P_min_fun(p)
         E_target = self.get_E_target_fun(p)
+        E_target_path = self.get_E_target_path_fun(p)
+        E_backoff = self.get_E_backoff_fun(p)
         
         g = []
         g_lb = []
@@ -210,6 +229,16 @@ class NominalMPCLoadShifting(NominalMPC):
             g.append(g_demand)
             g_lb.append(g_demand_lb)
             g_ub.append(g_demand_ub)
+            # sum(P_out) + s_E >= E_target - E_backoff
+            g_E_lower = E_target_path[i] - E_backoff - P_sum - s_E_path[i]
+            # sum(P_out) - s_E <= E_target + E_backoff
+            g_E_upper = P_sum - s_E_path[i] - E_target_path[i] - E_backoff
+            g_E_path = ca.vertcat(g_E_lower, g_E_upper)
+            g_E_path_lb = -ca.inf*ca.DM.ones(2)
+            g_E_path_ub = ca.DM.zeros(2)
+            g.append(g_E_path)
+            g_lb.append(g_E_path_lb)
+            g_ub.append(g_E_path_ub)
             if self.opt['use_soft_constraints_state']:
                 s_x = self.get_s_x_from_v_fun(v)
                 sc_backoff = 0.05
@@ -243,11 +272,13 @@ class NominalMPCLoadShifting(NominalMPC):
             U_last = self.get_u_from_v_fun(v_last)
             X_last = self.get_x_from_v_fun(v_last)
             s_E_init = self.get_s_from_v_fun(v_last) + self.ohps.P_gtg_max + self.ohps.P_wtg_max
+            s_E_path_last = self.get_s_E_path_from_v_fun(v_last)
             # shift states and inputs, repeat last value
             U_init = ca.vertcat(U_last[1:,:], U_last[-1,:])
             X_init = ca.vertcat(X_last[1:,:], X_last[-1,:])
             s_x_init = ca.DM.zeros(self.horizon)
-            return self.get_v_fun(U_init, X_init, s_E_init, s_x_init)
+            s_E_path_init = ca.vertcat(s_E_path_last[1:], s_E_path_last[-1])
+            return self.get_v_fun(U_init, X_init, s_E_init, s_E_path_init, s_x_init)
         # No last solution provided, guess zeros for inputs and initial state for X
         # U_init = ca.horzcat(P_gtg_init, I_bat_init)
         U_init = ca.DM.zeros(self.horizon, self.nu)
@@ -255,6 +286,7 @@ class NominalMPCLoadShifting(NominalMPC):
         # s_P_init = P_demand - self.ohps.gtg.bounds['ubu']*ca.DM.ones(self.horizon)
         # s_P_init = 1/3*self.get_P_demand_fun(p)
         s_E_init = self.horizon*(self.ohps.P_gtg_max + self.ohps.P_wtg_max)
+        s_E_path_init = self.get_E_target_path_fun(p)
         s_x_init = ca.DM.zeros(self.horizon)
-        return self.get_v_fun(U_init, X_init, s_E_init, s_x_init)
+        return self.get_v_fun(U_init, X_init, s_E_init, s_E_path_init, s_x_init)
 

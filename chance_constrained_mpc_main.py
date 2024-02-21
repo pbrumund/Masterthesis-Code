@@ -24,8 +24,8 @@ chance_constrained_mpc.get_optimization_problem()
 gp_opt = get_gp_opt(dt_pred = mpc_opt['dt'], steps_forward = mpc_opt['N'], verbose = False)
 gp = WindPredictionGP(gp_opt)
 
-t_start = mpc_opt['t_start']
-t_end = mpc_opt['t_end']
+t_start = mpc_opt['t_start_sim']
+t_end = mpc_opt['t_end_sim']
 dt = datetime.timedelta(minutes=mpc_opt['dt'])
 n_times = int((t_end-t_start)/dt)
 times = [t_start + i*dt for i in range(n_times)]

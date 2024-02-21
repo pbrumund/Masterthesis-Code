@@ -14,8 +14,8 @@ def get_mpc_opt(method='nominal', **kwargs):
         'std_list_multistage': (-1,0,1),
         'use_simple_scenarios': False,
         'use_soft_constraints_state': True,
-        't_start': datetime.datetime(2022,1,1),
-        't_end': datetime.datetime(2022,12,31,23,50)
+        't_start_sim': datetime.datetime(2022,1,1),
+        't_end_sim': datetime.datetime(2022,12,31,23,50)
     }
     param = {
         'alpha_1': -0.4,

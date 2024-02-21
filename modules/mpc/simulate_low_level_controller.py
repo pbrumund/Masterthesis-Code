@@ -48,7 +48,12 @@ class LowLevelController:
         g = ca.vertcat(g_ode, g_x0)
         g_lb = ca.DM.zeros(self.n_intervals+1)
         g_ub = ca.DM.zeros(self.n_intervals+1)
-
+        g_P = 16000 - (P_wtg + P_bat + P_gtg)
+        g_P_lb = -ca.inf*ca.DM.ones(self.n_intervals)
+        g_P_ub = ca.DM.zeros(self.n_intervals)
+        g = ca.vertcat(g, g_P)
+        g_lb = ca.vertcat(g_lb, g_P_lb)
+        g_ub = ca.vertcat(g_ub, g_P_ub)
         i_init = ca.MX.sym('i_init')
         x_init = [x0]
         for j in range(self.n_intervals):
@@ -70,13 +75,23 @@ class LowLevelController:
                                   [self._solver(x0=v_init, p=p, lbx=v_lb, ubx=v_ub, lbg=g_lb, ubg=g_ub)['x'], 
                                    self._solver(x0=v_init, p=p, lbx=v_lb, ubx=v_ub, lbg=g_lb, ubg=g_ub)['f'],
                                    self._solver(x0=v_init, p=p, lbx=v_lb, ubx=v_ub, lbg=g_lb, ubg=g_ub)['g']])
+        self.v_init_fun = ca.Function('v_init', [p, i_init], [v_init])
+        self.v_lb = v_lb
+        self.v_ub = v_ub
+        self.g_lb = g_lb
+        self.g_ub = g_ub
         # lower GTG output if battery is full
     def simulate(self, t, x_k, u_k, s_P_k, P_demand, P_gtg_last=25600):
         P_gtg = u_k[0]
         i_init = u_k[1]
         w = self.dh.get_measurement(t)
         p = ca.vertcat(w, x_k, P_demand, P_gtg, P_gtg_last, s_P_k)
-        v_opt, f_opt, g_opt = self.solver(i_init, p)
+        v_init = self.v_init_fun(p, i_init)
+        sol = self._solver(x0=v_init, p=p, lbx=self.v_lb, ubx=self.v_ub, lbg=self.g_lb, ubg=self.g_ub)
+        v_opt = sol['x']
+        f_opt = sol['f']
+        g_opt = sol['g']
+        # v_opt, f_opt, g_opt = self.solver(i_init, p)
         P_bat = self.ohps.get_P_bat(x_k, v_opt[self.n_intervals+1],0)
         P_wtg = self.ohps.get_P_wtg(x_k, u_k, w)
         if P_demand - P_gtg - P_wtg - P_bat - s_P_k < -10:

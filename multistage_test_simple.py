@@ -26,8 +26,8 @@ ohps.setup_integrator(dt=60*mpc_opt['dt'])
 
 multistage_mpc = MultistageMPC(ohps, gp, mpc_opt)
 
-t_start = mpc_opt['t_start']
-t_end = mpc_opt['t_end']
+t_start = mpc_opt['t_start_sim']
+t_end = mpc_opt['t_end_sim']
 
 dt = datetime.timedelta(minutes=mpc_opt['dt'])
 n_times = int((t_end-t_start)/dt)

@@ -8,7 +8,7 @@ from .get_mpc_opt import get_nlp_opt
 from ..models import OHPS
 from ..gp import TimeseriesModel
 
-class MultistageMPC(MPC):
+class MultistageMPCLoadShifting(MPC):
     def __init__(self, ohps: OHPS, gp: TimeseriesModel, opt) -> None:
         self.ohps = ohps
         self.gp = gp
@@ -349,9 +349,12 @@ class MultistageMPC(MPC):
             v_last = list(v_last[1:])
             v_last.append(v_last[-1])
             v_init = []
-            for v_i, nodes_i in zip(v_last, self.nodes):
+            for i, (v_i, nodes_i) in enumerate(zip(v_last, self.nodes)):
                 for node in nodes_i:
-                    v_init.append(v_i)
+                    if i == self.horizon-2:
+                        v_init.append(v_i[:-1]) # remove s_E from originally last, now second to last node
+                    else:
+                        v_init.append(v_i)
             return ca.vertcat(*v_init)
         # Build initial solution
         v_init = []
@@ -373,18 +376,22 @@ class MultistageMPC(MPC):
                 P_gtg = self.ohps.get_P_gtg(x_init, u_init, w)
                 P_bat = self.ohps.get_P_bat(x_init, u_init, w)
                 P_wtg = self.ohps.get_P_wtg(x_init, u_init, w)
-                if i == self.horizon:
+                if i == self.horizon-1:
                     s_E_init = E_target
                 else:
                     s_E_init = ca.DM.zeros(0)
+                if self.opt['use_path_constraints_energy']:
+                    s_E_path_init = 0
+                else:
+                    s_E_path_init = ca.DM.zeros(0)
                 s_x_init = 0
-                v_init_i_k = node.get_v_fun(x_init, u_init, s_E_init, s_x_init)
+                v_init_i_k = node.get_v_fun(x_init, u_init, s_x_init, s_E_path_init, s_E_init)
                 v_init.append(v_init_i_k)
             x_init_list.append(x_init)
             u_init_list.append(u_init)
         return ca.vertcat(*v_init)
                 
-    def get_parameters(self, x0, P_gtg_last, P_demand):
+    def get_parameters(self, x0, P_gtg_last, P_out_last, P_min, E_target, E_target_path=None, E_backoff=None):
         p = []
         for i, nodes_i in enumerate(self.nodes):
             for node in nodes_i:
@@ -392,7 +399,13 @@ class MultistageMPC(MPC):
                 if i == 0:
                     p_i_k.append(x0)
                     p_i_k.append(P_gtg_last)
-                p_i_k.append(P_demand[i])
+                    p_i_k.append(P_out_last)
+                if i == self.horizon-1:
+                    p_i_k.append(E_target)
+                if self.opt['use_path_constraints_energy']:
+                    p_i_k.append(E_backoff)
+                    p_i_k.append(E_target_path[i])           
+                p_i_k.append(P_min)
                 p_i_k = node.get_p_fun(*p_i_k)
                 p.append(p_i_k)
         return ca.vertcat(*p)
@@ -409,7 +422,7 @@ class TreeNode:
             self.is_root_node = True
         else:
             self.is_root_node = False
-        if time_index == self.opt['N']-1:
+        if time_index == opt['N']-1:
             self.is_leaf_node = True
         else:
             self.is_leaf_node = False
@@ -442,14 +455,22 @@ class TreeNode:
             self.s_E = ca.MX.sym(f's_E_{self.time_index}_{self.node_index}',0)
             self.s_E_lb = ca.DM.zeros(0)
             self.s_E_ub = ca.DM.zeros(0)
+        if self.opt['use_path_constraints_energy']:
+            self.s_E_path = ca.MX.sym(f's_E_path_{self.time_index}_{self.node_index}')
+            self.s_E_path_lb = 0
+            self.s_E_path_ub = ca.inf
+        else:
+            self.s_E_path = ca.MX.sym(f's_E_path_{self.time_index}_{self.node_index}', 0)
+            self.s_E_path_lb = ca.DM.zeros(0)
+            self.s_E_path_ub = ca.DM.zeros(0)
         self.s_x = ca.MX.sym(f's_x_{self.time_index}_{self.node_index}')
         self.s_x_lb = 0
         self.s_x_ub = ca.inf
-        self.v = ca.vertcat(self.u, self.x, self.s_E, self.s_x)
-        self.v_lb = ca.vertcat(self.u_lb, self.x_lb, self.s_E_lb, self.s_x_lb)
-        self.v_ub = ca.vertcat(self.u_ub, self.x_ub, self.s_E_ub, self.s_x_ub)
+        self.v = ca.vertcat(self.u, self.x, self.s_x, self.s_E_path, self.s_E)
+        self.v_lb = ca.vertcat(self.u_lb, self.x_lb, self.s_E_path_lb, self.s_x_lb, self.s_E_lb)
+        self.v_ub = ca.vertcat(self.u_ub, self.x_ub, self.s_E_path_ub, self.s_x_ub, self.s_E_ub)
         self.get_v_fun = ca.Function(f'get_v_{self.time_index}_{self.node_index}', 
-                                     [self.x, self.u, self.s_E, self.s_x], [self.v])
+                                     [self.x, self.u, self.s_x, self.s_E_path, self.s_E], [self.v])
         self.get_u_fun = ca.Function(f'get_u_{self.time_index}_{self.node_index}', 
                                      [self.v], [self.u])
         self.get_x_fun = ca.Function(f'get_x_{self.time_index}_{self.node_index}', 
@@ -477,6 +498,11 @@ class TreeNode:
             if self.opt['use_chance_constraints_multistage']:
                 self.wind_std = ca.MX.sym(f'std_{self.time_index}_{self.node_index}')
                 self.param.append(self.wind_std)
+        if self.opt['use_path_constraints_energy']:
+            self.E_backoff = ca.MX.sym('E_backoff')
+            self.E_target_path = ca.MX.sym('E_target_path')
+            self.param.append(self.E_backoff)
+            self.param.append(self.E_target_path)
         self.P_min = ca.MX.sym(f'P_min_{self.time_index}_{self.node_index}')
         self.param.append(self.P_min)
         self.p = ca.vertcat(*self.param)
@@ -532,6 +558,14 @@ class TreeNode:
             self.constraints.append(g_E)
             g_lb.append(g_E_lb)
             g_ub.append(g_E_ub)
+        if self.opt['use_path_constraints_energy']:
+            # sum(P_out) + s_E >= E_target - E_backoff
+            g_E_lower = self.E_target_path - self.E_backoff - self.P_sum - self.s_E_path
+            # sum(P_out) - s_E <= E_target + E_backoff
+            g_E_upper = self.P_sum - self.s_E_path - self.E_target_path - self.E_backoff
+            self.constraints.append(ca.vertcat(g_E_lower, g_E_upper))
+            g_lb.append(-ca.inf*ca.DM.ones(2))
+            g_ub.append(ca.DM.zeros(2))
 
         if self.opt['use_soft_constraints_state'] and not self.is_root_node:
             x_next = self.ohps.get_next_state(self.x, self.u)
@@ -579,11 +613,13 @@ class TreeNode:
         self.J_bat = -self.opt['param']['k_bat']*SOC
         self.J_u = self.u.T@self.opt['param']['R_input']@self.u
         if self.is_leaf_node:
-            self.J_s_E = self.opt['param']['r_s_E']*(self.s_E)/(self.E_target)
+            self.J_s_E = self.opt['param']['r_s_E']*(self.s_E/200000)**2
         else:
             self.J_s_E = 0
         if self.opt['use_soft_constraints_state']:
             self.J_s_x = self.opt['param']['r_s_x']*self.s_x
+        if self.opt['use_path_constraints_energy']:
+            self.J_s_E_path = self.opt['param']['r_s_E']*(self.s_E_path/200000)**2
         else:
             self.J_s_x = 0
         self.J = (self.J_gtg+self.J_bat+self.J_u+self.J_dP+self.J_s_E+self.J_s_x)*self.probability
