@@ -10,7 +10,7 @@ class DataHandler():
         self.dt_meas = opt['dt_meas']   # interval of measurements
 
     def get_time_since_forecast(self, time, steps):
-        t_start_predict = time.replace(hour=time.hour//6*6)
+        t_start_predict = time.replace(hour=time.hour//6*6, minute=0)
         i_start = np.where(self.weather_data['times1_sh']==t_start_predict)
         t_predict = time+datetime.timedelta(minutes=self.dt_meas*steps)
         time_since_pred = t_predict-t_start_predict

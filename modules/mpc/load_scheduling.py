@@ -141,7 +141,7 @@ class DayAheadScheduler:
             if E_target is None:
                 E_target = self.get_E_target(t)
             E_target += dE
-            p = ca.vertcat(P_wtg_NWP, x0, P_min, E_target+dE)
+            p = ca.vertcat(P_wtg_NWP, x0, P_min, E_target)
             v_init = ca.vertcat(0*self.ohps.P_gtg_max*ca.DM.ones(self.steps), ca.DM.zeros(self.steps), 
                                 x0*ca.DM.ones(self.steps+1), E_target)
             sol = self.solver(
