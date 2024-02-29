@@ -104,7 +104,7 @@ class HomoscedasticTimeseriesModel(WindPredictionGP):
         see https://gpflow.github.io/GPflow/develop/notebooks/advanced/heteroskedastic.html
         """
         # TODO: Get a simpler model (homoscedastic or simple time series) for comparison
-        self.filename_gp = f'modules/gp/models/gp_prior_{self.opt["n_z"]}_homoscedastic_se'
+        self.filename_gp = f'modules/gp/models/gp_prior_{self.opt["n_z"]}_homoscedastic_without_time'
         try:
             gp_prior = tf.saved_model.load(self.filename_gp)
             if self.opt['verbose']:
@@ -130,12 +130,12 @@ class HomoscedasticTimeseriesModel(WindPredictionGP):
         kernel_mean = (
             kernels_nwp_mean
             # + gpf.kernels.SquaredExponential(active_dims=[n_inputs-2])
-            + gpf.kernels.Periodic(
-                gpf.kernels.SquaredExponential(active_dims=[n_inputs-1]), period=365) 
+            # + gpf.kernels.Periodic(
+            #     gpf.kernels.SquaredExponential(active_dims=[n_inputs-1]), period=365) 
             # + gpf.kernels.Periodic(
             #     gpf.kernels.SquaredExponential(active_dims=[n_inputs-1]), period=1)
             )
-        gpf.set_trainable(kernel_mean.submodules[7].period, False)
+        # gpf.set_trainable(kernel_mean.submodules[7].period, False)
         # gpf.set_trainable(kernel_mean.submodules[7+1].period, False)
         
         mean = gpf.functions.Constant(np.zeros(1))
@@ -208,7 +208,7 @@ class HomoscedasticTimeseriesModel(WindPredictionGP):
                     break
                 if self.opt['verbose']:# and i%20==0:
                     print(f"Epoch {i} - Loss: {loss_fn().numpy() : .4f}")
-                if (i+1)%10==0 and reselect_data or i>150:
+                if (i+1)%10==0 and reselect_data:# or i>150:
                     training_subset = random.sample(range(n_samples), n_train_1)
                     training_step, loss_fn = self.get_training_step(
                         X_train[training_subset,:], y_train[training_subset,:])
