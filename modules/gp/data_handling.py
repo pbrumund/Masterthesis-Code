@@ -10,7 +10,11 @@ class DataHandler():
         self.dt_meas = opt['dt_meas']   # interval of measurements
 
     def get_time_since_forecast(self, time, steps):
-        t_start_predict = time.replace(hour=time.hour//6*6, minute=0)
+        if steps < 0:
+            t_predict = time+datetime.timedelta(minutes=self.dt_meas*steps)
+            t_start_predict = t_predict.replace(hour=t_predict.hour//6, minute=0)
+        else:
+            t_start_predict = time.replace(hour=time.hour//6*6, minute=0)
         i_start = np.where(self.weather_data['times1_sh']==t_start_predict)
         t_predict = time+datetime.timedelta(minutes=self.dt_meas*steps)
         time_since_pred = t_predict-t_start_predict
@@ -30,14 +34,23 @@ class DataHandler():
         else:
             times_sh = self.weather_data['times2_sh']
         dt = time - times_sh[0].astype(datetime.datetime)
-        i_start = int(dt.total_seconds()//21600) * 6 #6 hours, time of last released forecast
+        time_new = time + steps*datetime.timedelta(minutes=self.dt_meas)
+        if steps == -1:
+            1==1
+        if steps < 0:
+            dt = time_new - times_sh[0].astype(datetime.datetime)
+            i_start = int(dt.total_seconds()//3600)
+            #i_shift = i_start - int(dt.total_seconds()//21600) * 6
+            steps = steps%(60/self.dt_meas)
+        else:
+            i_start = int(dt.total_seconds()//21600) * 6 #6 hours, time of last released forecast
         predicted_trajectory = np.concatenate([self.weather_data[key+"_sh"][i_start:i_start+6], 
                                                self.weather_data[key+"_mh"][i_start:i_start+6], 
                                                self.weather_data[key+"_lh"][i_start:]])    # Reconstruct the most recent NWP at the given time
         predicted_times = np.concatenate([self.weather_data["times1_sh"][i_start:i_start+6], 
                                           self.weather_data["times1_mh"][i_start:i_start+6], 
                                           self.weather_data["times1_lh"][i_start:]])    # Reconstruct the most recent NWP at the given time
-        i = np.where(predicted_times==(time+datetime.timedelta(minutes=self.dt_meas*steps)).replace(minute=0))[0][0]
+        i = np.where(predicted_times==time_new.replace(minute=0))[0][0]
         # interpolate between weather predictions between full hours
         nwp_interp = (predicted_trajectory[i+1]*(time+steps*datetime.timedelta(minutes=self.dt_meas)).minute/60 
                     + predicted_trajectory[i]*(1-(time+steps*datetime.timedelta(minutes=self.dt_meas)).minute/60))

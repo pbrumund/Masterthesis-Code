@@ -12,7 +12,7 @@ def get_gp_opt(**kwargs):
            'epochs_timeseries_retrain': 500,
            'loss_lb': 0.5,
            'verbose': True,
-           'n_last': 72,   # 12 h
+           'n_last': 36,   # 12 h
            'train_posterior': True,
            'steps_forward': 60,
            't_start_score': datetime.datetime(2022,1,1),
