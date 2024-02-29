@@ -306,7 +306,7 @@ class TimeseriesModel(WindPredictionGP):
         s = tf.get_static_value(steps, partial=True)
         steps = float(s[0])
         
-        if steps < 0:
+        if False:#steps < 0:
             # time before current time, training
             t = time+steps*datetime.timedelta(minutes=self.opt['dt_meas'])
             x = self.data_handler.generate_features(
@@ -328,14 +328,17 @@ class TimeseriesModel(WindPredictionGP):
         X_train = torch.arange(start=-n_last+i_shift, end=i_shift).double().reshape((-1,1))
         y_train = torch.zeros(n_last).double()
         self.X_train_timeseries = X_train
-        self.y_train_timeseries = y_train
         t_start = prediction_time - n_last*datetime.timedelta(minutes=self.opt['dt_meas'])
         times = [t_start + i*datetime.timedelta(minutes=self.opt['dt_meas']) for i in range(n_last)]
 
         for i, t in enumerate(times):
-            measurement = self.data_handler.get_measurement(t, 0)
-            prediction = self.data_handler.get_NWP(t, 0)
-            y_train[i] = measurement - prediction
+            # measurement = self.data_handler.get_measurement(t, 0)
+            # prediction = self.data_handler.get_NWP(prediction_time, 
+            #     (t-prediction_time).total_seconds()/(60*self.opt['dt_meas']))
+            # y_train[i] = measurement - prediction
+            y_train[i] = self.data_handler.generate_labels(
+                prediction_time, steps_ahead=X_train.numpy().reshape(-1)[i]-1)
+        self.y_train_timeseries = y_train
         if self.timeseries_gp_param is None:
             self.first_train = True
         else:
@@ -517,15 +520,16 @@ class TimeseriesModel(WindPredictionGP):
         std_traj = np.sqrt(var_traj)
         
 
-        plt.figure()
-        plt.plot(times, NWP_traj, color='tab:orange')
-        plt.plot(times, meas_traj, color='tab:green')
-        plt.plot(times, gp_pred_traj, color='tab:blue')
-        plt.fill_between(times, gp_pred_traj-2*std_traj, gp_pred_traj+2*std_traj, color='lightgray')
-        plt.fill_between(times, gp_pred_traj-std_traj, gp_pred_traj+std_traj, color='tab:gray')
-        plt.xlabel('time')
-        plt.ylabel('wind speed')
-        plt.legend(['Weather prediction', 'Actual wind speed', 'Prior GP prediction'])
+        fig = plt.figure()
+        ax = plt.axes()
+        ax.plot(times, NWP_traj, color='tab:orange')
+        ax.plot(times, meas_traj, color='tab:green')
+        ax.plot(times, gp_pred_traj, color='tab:blue')
+        ax.fill_between(times, gp_pred_traj-2*std_traj, gp_pred_traj+2*std_traj, color='lightgray')
+        ax.fill_between(times, gp_pred_traj-std_traj, gp_pred_traj+std_traj, color='tab:gray')
+        ax.set_xlabel('time')
+        ax.set_ylabel('wind speed')
+        fig.legend(['Weather prediction', 'Actual wind speed', 'Prior GP prediction'])
         plt.figure()
         plt.plot(times, std_traj)
         plt.plot(times, np.sqrt(signal_var_traj))
@@ -533,7 +537,7 @@ class TimeseriesModel(WindPredictionGP):
         plt.xlabel('time')
         plt.ylabel('predicted uncertainty')
         plt.legend(['total uncertainty', 'uncertainty of mean', 'estimated heteroscedastic noise'])
-
+        return fig, ax
     def plot_prior_distribution(self, start_time, stop_time):
         """Plot dependency of predicted mean and standard deviation on input variables"""
         steps = int((stop_time - start_time).total_seconds()/(60*self.opt['dt_meas']))
@@ -553,16 +557,16 @@ class TimeseriesModel(WindPredictionGP):
             mean_traj[i] = mean
             var_traj[i] = np.sqrt(var)
         
-        fig, ax = plt.subplots(2, int(np.ceil(n_inputs/2)))
+        fig1, ax1 = plt.subplots(2, int(np.ceil(n_inputs/2)))
         xlabels = ['wind prediction', 'wind speed of gust', 'sqrt(CAPE)', 'temperature', 
                    'humidity', 'pressure', 'time']
         for input_dim in range(n_inputs):
-            ix = input_dim%ax.shape[1]
-            iy = input_dim//ax.shape[1]
-            ax[iy,ix].scatter(x_mat[:, input_dim], mean_traj)
-            ax[iy,ix].scatter(x_mat[:, input_dim], var_traj)
-            ax[iy,ix].set_xlabel(xlabels[input_dim])
-            ax[iy,ix].set_ylabel('predicted error')
+            ix = input_dim%ax1.shape[1]
+            iy = input_dim//ax1.shape[1]
+            ax1[iy,ix].scatter(x_mat[:, input_dim], mean_traj)
+            ax1[iy,ix].scatter(x_mat[:, input_dim], var_traj)
+            ax1[iy,ix].set_xlabel(xlabels[input_dim])
+            ax1[iy,ix].set_ylabel('predicted error')
 
         n_bins = 50
         means = np.zeros((n_bins, n_inputs))
@@ -581,14 +585,14 @@ class TimeseriesModel(WindPredictionGP):
                 means[bin, input_dim] = np.mean(means_in_bin)
                 vars[bin, input_dim] = np.mean(vars_in_bin)
                 input_means[bin, input_dim] = np.mean(x_mat[inputs, input_dim])
-        fig, ax = plt.subplots(2, int(np.ceil(n_inputs/2)))
+        fig2, ax2 = plt.subplots(2, int(np.ceil(n_inputs/2)))
         for input_dim in range(n_inputs):
-            ix = input_dim%ax.shape[1]
-            iy = input_dim//ax.shape[1]
-            ax[iy,ix].plot(input_means[:,input_dim], means[:,input_dim])
-            ax[iy,ix].plot(input_means[:,input_dim], vars[:,input_dim])
-            ax[iy,ix].set_xlabel(xlabels[input_dim])
-            ax[iy,ix].set_ylabel('predicted error')
+            ix = input_dim%ax2.shape[1]
+            iy = input_dim//ax2.shape[1]
+            ax2[iy,ix].plot(input_means[:,input_dim], means[:,input_dim])
+            ax2[iy,ix].plot(input_means[:,input_dim], vars[:,input_dim])
+            ax2[iy,ix].set_xlabel(xlabels[input_dim])
+            ax2[iy,ix].set_ylabel('predicted error')
 
     def plot_posterior(self, start_time, steps, train=False):
         gp_pred_traj, gp_var = self.predict_trajectory(start_time, steps, train)
@@ -604,15 +608,18 @@ class TimeseriesModel(WindPredictionGP):
 
         std_traj = np.sqrt(gp_var)
 
-        plt.figure()
-        plt.plot(times, NWP_traj, color='tab:orange')
-        plt.plot(times, meas_traj, color='tab:green')
-        plt.plot(times, gp_pred_traj, color='tab:blue')
-        plt.fill_between(times, gp_pred_traj-2*std_traj, gp_pred_traj+2*std_traj, color='lightgray')
-        plt.fill_between(times, gp_pred_traj-std_traj, gp_pred_traj+std_traj, color='tab:gray')
-        plt.xlabel('time')
-        plt.ylabel('wind speed')
-        plt.legend(['Weather prediction', 'Actual wind speed', 'Timeseries GP prediction'])
+        fig = plt.figure()
+        ax = plt.axes()
+        ax.plot(times, NWP_traj, color='tab:orange')
+        ax.plot(times, meas_traj, color='tab:green')
+        ax.plot(times, gp_pred_traj, color='tab:blue')
+        ax.fill_between(times, gp_pred_traj-2*std_traj, gp_pred_traj+2*std_traj, color='lightgray')
+        ax.fill_between(times, gp_pred_traj-std_traj, gp_pred_traj+std_traj, color='tab:gray')
+        ax.xlabel('time')
+        ax.ylabel('wind speed')
+        fig.legend(['Weather prediction', 'Actual wind speed', 'Timeseries GP prediction'])
+        return fig, ax
+        
         # plt.figure()
         # plt.plot(times, std_traj)
         # plt.xlabel('time')

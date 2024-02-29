@@ -427,7 +427,7 @@ if __name__ == "__main__":
     # measurements = np.array([dh.get_measurement(t) for t in times])
     # np.savetxt('../Abbildungen/data_analysis/wind_predictions.csv', predictions)
     # np.savetxt('../Abbildungen/data_analysis/wind_measurements.csv', measurements)
-    predictions = np.loadtxt('../Abbildungen/data_analysis/wind_predictions.csv')
+    """ predictions = np.loadtxt('../Abbildungen/data_analysis/wind_predictions.csv')
     measurements = np.loadtxt('../Abbildungen/data_analysis/wind_measurements.csv')
 
     errors = measurements - predictions
@@ -487,7 +487,7 @@ if __name__ == "__main__":
             predictions_i = predictions
             measurements_i = measurements
         cov.append(np.cov(predictions_i, measurements_i)[0,1])
-    plt.plot(x, cov)
+    plt.plot(x, cov) """
             # [r'$2\,\mathrm{m/s}\leq v_\mathrm{wind,MF}\leq 3\,\mathrm{m/s}$', 
     #             r'$4\,\mathrm{m/s}\leq v_\mathrm{wind,MF}\leq 5\,\mathrm{m/s}$',
     #             r'$10\,\mathrm{m}/\mathrm{s}\leq v_\mathrm{wind,MF}\leq 11\,\mathrm{m}/\mathrm{s}$']
@@ -587,18 +587,20 @@ if __name__ == "__main__":
 
     # plot error over air pressure
 
-    """ start_time = datetime.datetime(2020,1,1)
+    start_time = datetime.datetime(2020,1,1)
     end_time = datetime.datetime(2022,12,31)
     weather_data = fi.load_weather_data(start_time, end_time)
 
-    n_points = len(weather_data['times_meas'])
+    # 2020/21
+    indices = [i for i, t in enumerate(weather_data['times_meas']) if t.year<2022]
+    n_points = len(indices)
 
     measurements = np.zeros(n_points)
     predictions = np.zeros(n_points)
     errors = np.zeros(n_points)
     p_pred = np.zeros(n_points)
 
-    for i in range(n_points):
+    for i in indices:
         t = weather_data['times_meas'][i]
         measurements[i] = ut.get_wind_value(weather_data, t, 0)
         predictions[i] = ut.get_NWP(weather_data, t, 0, 'wind_speed_10m')
@@ -630,7 +632,49 @@ if __name__ == "__main__":
     plt.legend(['mean error', 'standard deviation'])
     plt.xlabel('air pressure')
     plt.ylabel('prediction error')
-    plt.show() """
+
+    # 2022
+    indices = [i for i, t in enumerate(weather_data['times_meas']) if t.year==2022]
+    n_points = len(indices)
+
+    measurements = np.zeros(n_points)
+    predictions = np.zeros(n_points)
+    errors = np.zeros(n_points)
+    p_pred = np.zeros(n_points)
+
+    for i, k in enumerate(indices):
+        t = weather_data['times_meas'][k]
+        measurements[i] = ut.get_wind_value(weather_data, t, 0)
+        predictions[i] = ut.get_NWP(weather_data, t, 0, 'wind_speed_10m')
+        errors[i] = measurements[i] - predictions[i]
+        p_pred[i] = ut.get_NWP(weather_data, t, 0, "air_pressure_at_sea_level")
+    
+    p_sorted = np.sort(p_pred)
+    errors_sorted = errors[np.argsort(p_pred)]
+
+    bins = 10
+    var_errors_in_range = np.zeros(bins)
+    mean_errors_in_range = np.zeros(bins)
+    p_range_mean = np.zeros(bins)
+    for i in range(bins):
+        index_1 = int(n_points*i/bins)
+        index_2 = int(n_points*(i+1)/bins)
+        p_range_mean[i] = np.mean(p_sorted[index_1:index_2])
+        var_errors_in_range[i] = np.var(errors_sorted[index_1:index_2])
+        mean_errors_in_range[i] = np.mean(errors_sorted[index_1:index_2])
+
+
+    plt.figure()
+    plt.scatter(p_pred, errors)
+    plt.xlabel('air pressure')
+    plt.ylabel('prediction error')
+    plt.figure()
+    plt.plot(p_range_mean, mean_errors_in_range)
+    plt.plot(p_range_mean, np.sqrt(var_errors_in_range))
+    plt.legend(['mean error', 'standard deviation'])
+    plt.xlabel('air pressure')
+    plt.ylabel('prediction error')
+    plt.show()
 
     # plot error over temperature
     """ start_time = datetime.datetime(2020,1,1)
