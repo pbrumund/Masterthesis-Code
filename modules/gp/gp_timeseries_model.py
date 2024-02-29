@@ -104,7 +104,7 @@ class TimeseriesModel(WindPredictionGP):
         see https://gpflow.github.io/GPflow/develop/notebooks/advanced/heteroskedastic.html
         """
         # TODO: Get a simpler model (homoscedastic or simple time series) for comparison
-        self.filename_gp = f'modules/gp/models/gp_prior_{self.opt["n_z"]}'
+        self.filename_gp = f'modules/gp/models/gp_prior_{self.opt["n_z"]}_without_time'
         try:
             gp_prior = tf.saved_model.load(self.filename_gp)
             if self.opt['verbose']:
@@ -247,7 +247,7 @@ class TimeseriesModel(WindPredictionGP):
                     break
                 if self.opt['verbose']:# and i%20==0:
                     print(f"Epoch {i} - Loss: {loss_fn().numpy() : .4f}")
-                if (i+1)%10==0 and reselect_data or i>150:
+                if (i+1)%10==0 and reselect_data:# or i>150:
                     training_subset = random.sample(range(n_samples), n_train_1)
                     training_step, loss_fn = self.get_training_step(
                         X_train[training_subset,:], y_train[training_subset,:])
@@ -419,10 +419,10 @@ class TimeseriesModel(WindPredictionGP):
         """
         if include_last_measurement:
             # include last measurement in prediction for exact first value by shifting time and indices
-            start_time_gp = start_time-datetime.timedelta(minutes=self.opt['dt_meas'])
+            start_time_gp = start_time+datetime.timedelta(minutes=self.opt['dt_meas'])
         else:
             start_time_gp = start_time
-        start_time_gp = start_time
+        # start_time_gp = start_time
         dt = 0  # if start time is not multiple of 10 min, difference to last previous multiple to shift indices#
         if start_time_gp.minute%self.opt['dt_meas'] != 0:
             dt = start_time_gp.minute%self.opt['dt_meas']

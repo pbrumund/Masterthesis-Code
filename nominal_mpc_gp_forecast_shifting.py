@@ -13,14 +13,16 @@ from modules.plotting import TimeseriesPlot
 from modules.mpc_scoring import DataSaving
 from modules.mpc import LowLevelController
 
-ohps = OHPS(N_p=8000)
-plot = True
+N_p = 8000
+ohps = OHPS(N_p=N_p)
+plot = False
 
 mpc_opt = get_mpc_opt(N=30, t_start_sim=datetime.datetime(2022,8,1))
-mpc_opt['param']['k_dP'] = 20
-mpc_opt['param']['k_gtg_dP'] = 0
-mpc_opt['param']['r_s_E'] = 10000
+mpc_opt['param']['k_dP'] = 50
+mpc_opt['param']['k_gtg_dP'] = 25
+mpc_opt['param']['r_s_E'] = 100
 mpc_opt['use_path_constraints_energy'] = True
+mpc_opt['N_p'] = N_p
 nominal_mpc = NominalMPCLoadShifting(ohps, mpc_opt)
 nominal_mpc.get_optimization_problem()
 

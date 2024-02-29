@@ -29,8 +29,10 @@ mpc_opt['t_end_sim'] = t_end
 # mpc_opt['param']['R_input'] = ca.diag([0,1e-8])
 mpc_opt['param']['k_dP'] = 50
 mpc_opt['param']['r_s_E'] = 100
-mpc_opt['param']['k_gtg_dP'] = 10
+mpc_opt['param']['k_gtg_dP'] = 25
+mpc_opt['param']['k_bat'] = 0
 mpc_opt['use_path_constraints_energy'] = True
+mpc_opt['use_soft_constraints_state'] = False
 nominal_mpc = NominalMPCLoadShifting(ohps, mpc_opt)
 
 nominal_mpc.get_optimization_problem()
