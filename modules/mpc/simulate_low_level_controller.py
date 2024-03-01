@@ -24,6 +24,7 @@ class LowLevelController:
         P_demand = ca.MX.sym('P_demand') # Parameter
         P_gtg_last = ca.MX.sym('P_gtg_last')  # Parameter
         P_gtg_init = ca.MX.sym('P_gtg_init')
+        i_init = ca.MX.sym('i_init')
         s_P = ca.MX.sym('s_P') # Parameter
         P_wtg = [self.ohps.get_P_wtg(x[j], ca.vertcat(P_gtg, i[j]), w[j]) for j in range(self.n_intervals)]
         P_bat = [self.ohps.get_P_bat(x[j], ca.vertcat(P_gtg, i[j]), w[j]) for j in range(self.n_intervals)]
@@ -31,7 +32,7 @@ class LowLevelController:
         P_wtg = ca.vertcat(*P_wtg)
         P_bat = ca.vertcat(*P_bat)
 
-        f = ca.sumsqr(P_demand - P_gtg - P_wtg - P_bat - s_P) + 0.01*ca.sumsqr(P_gtg-P_gtg_init)
+        f = 10*ca.sumsqr(P_demand - P_gtg - P_wtg - P_bat - s_P) + 0.01*ca.sumsqr(P_gtg-P_gtg_init) + 0.1*ca.sumsqr(i-i_init)
         v = ca.vertcat(x, i, P_gtg)
         v_lb = ca.vertcat(self.ohps.battery.bounds['lbx']*ca.DM.ones(self.n_intervals+1),
                           self.ohps.battery.bounds['lbu']*ca.DM.ones(self.n_intervals),
@@ -39,7 +40,7 @@ class LowLevelController:
         v_ub = ca.vertcat(self.ohps.battery.bounds['ubx']*ca.DM.ones(self.n_intervals+1),
                           self.ohps.battery.bounds['ubu']*ca.DM.ones(self.n_intervals),
                           self.ohps.gtg.bounds['ubu']*ca.DM.ones(self.n_intervals))
-        p = ca.vertcat(w, x0, P_demand, P_gtg_init, P_gtg_last, s_P)
+        p = ca.vertcat(w, x0, P_demand, P_gtg_init, P_gtg_last, s_P, i_init)
         # ODE constraint
         x_next = [self.ohps.battery.get_next_state(x[j], i[j]) for j in range(self.n_intervals)]
         x_next = ca.vertcat(*x_next)
@@ -85,7 +86,7 @@ class LowLevelController:
         P_gtg = u_k[0]
         i_init = u_k[1]
         w = self.dh.get_measurement(t)
-        p = ca.vertcat(w, x_k, P_demand, P_gtg, P_gtg_last, s_P_k)
+        p = ca.vertcat(w, x_k, P_demand, P_gtg, P_gtg_last, s_P_k, i_init)
         v_init = self.v_init_fun(p, i_init)
         sol = self._solver(x0=v_init, p=p, lbx=self.v_lb, ubx=self.v_ub, lbg=self.g_lb, ubg=self.g_ub)
         v_opt = sol['x']

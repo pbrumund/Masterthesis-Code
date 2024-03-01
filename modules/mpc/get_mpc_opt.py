@@ -15,7 +15,7 @@ def get_mpc_opt(method='nominal', **kwargs):
         'use_simple_scenarios': False,
         'use_soft_constraints_state': True,
         't_start_sim': datetime.datetime(2022,1,1),
-        't_end_sim': datetime.datetime(2022,12,31,23,50)
+        't_end_sim': datetime.datetime(2022,12,31,18)
     }
     param = {
         'alpha_1': -0.4,
@@ -29,7 +29,7 @@ def get_mpc_opt(method='nominal', **kwargs):
         'R_input': ca.diag([0,1e-8]),# 5e-6
         'r_s_P': 100,
         'r_s_x': 10000,
-        'k_gtg_dP': 1,#5,#.5,
+        'k_gtg_dP': .5,#5,#.5,
         'k_bat_final': 0#500
     }
     opt['param'] = param

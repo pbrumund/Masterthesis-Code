@@ -8,7 +8,7 @@ if __name__ == '__main__':
     from modules.gp.fileloading import load_weather_data
     from modules.gp import get_gp_opt
     from modules.gp.scoring import (get_interval_score, get_mae, get_posterior_trajectories, get_nlpd,
-        get_rmse, get_RE, get_trajectory_gp_prior, get_trajectory_measured, get_trajectory_nwp, 
+        get_rmse, get_RE, get_trajectory_gp_prior, get_trajectory_measured, get_trajectory_nwp, get_posterior_trajectories_homoscedastic,
         get_direct_model_trajectories, get_simple_timeseries_traj, get_mape, get_trajectory_gp_prior_homoscedastic)
     
     rmse_list_heteroscedastic = []
@@ -42,7 +42,7 @@ if __name__ == '__main__':
         except:
             trajectory_gp_prior, var_gp_prior = get_trajectory_gp_prior(opt)
             np.savetxt(f'modules/gp/scoring/trajectory_gp_prior_heteroscedastic_{n_z}_without_time2.csv', trajectory_gp_prior)
-            np.savetxt(f'modules/gp/scoring/var_gp_prior_heteroscedastic_{n_z}_without_time2.csv', var_gp_prior)
+            np.savetxt(f'modules/gp/scoring/var_gp_prior_heteroscedastic_{n_z}_without_time2', var_gp_prior)
         try:
             trajectory_gp_prior_homoscedastic = np.loadtxt(f'modules/gp/scoring/trajectory_gp_prior_homoscedastic_{n_z}_without_time2.csv')
             var_gp_prior_homoscedastic = np.loadtxt(f'modules/gp/scoring/var_gp_prior_homoscedastic_{n_z}_without_time2.csv')
@@ -149,10 +149,14 @@ if __name__ == '__main__':
     mae_post_simple = np.zeros(steps_forward)
     re_post_simple = np.zeros(steps_forward)
     score_post_simple = np.zeros(steps_forward)
+    rmse_post_homoscedastic = np.zeros(steps_forward)
+    mae_post_homoscedastic = np.zeros(steps_forward)
+    re_post_homoscedastic = np.zeros(steps_forward)
+    score_post_homoscedastic = np.zeros(steps_forward)
     opt['n_z'] = 100
     trajectories_mean_post_simple, trajectories_var_post_simple = get_simple_timeseries_traj(opt)
     trajectories_mean_post, trajectories_var_post = get_posterior_trajectories(opt)
-    
+    trajectories_mean_post_homoscedastic, trajectories_var_post_homoscedastic = get_posterior_trajectories_homoscedastic(opt)
     # trajectories_mean_post = np.loadtxt('gp/scoring/trajectories_mean_post.csv')
     # trajectories_var_post = np.loadtxt('gp/scoring/trajectories_var_post.csv')
     # first dimension: time of prediction, second dimension: number of steps forward
@@ -167,6 +171,14 @@ if __name__ == '__main__':
         re_post[i] = get_RE(alpha, trajectory_measured[i:n_points+i], trajectory_post, var_post)
         score_post[i] = get_interval_score(alpha, trajectory_measured[i:n_points+i], trajectory_post, var_post)
     for i in range(opt['steps_forward']):
+        trajectory_post_homoscedastic = trajectories_mean_post_homoscedastic[:,i]
+        var_post_homoscedastic = trajectories_var_post_homoscedastic[:,i]
+        n_points = len(trajectory_post_homoscedastic)
+        rmse_post_homoscedastic[i] = get_rmse(trajectory_measured[i:n_points+i], trajectory_post_homoscedastic)
+        mae_post_homoscedastic[i] = get_mae(trajectory_measured[i:n_points+i], trajectory_post_homoscedastic)
+        re_post_homoscedastic[i] = get_RE(alpha, trajectory_measured[i:n_points+i], trajectory_post_homoscedastic, var_post_homoscedastic)
+        score_post_homoscedastic[i] = get_interval_score(alpha, trajectory_measured[i:n_points+i], trajectory_post_homoscedastic, var_post_homoscedastic)
+    for i in range(opt['steps_forward']):
         trajectory_post = trajectories_mean_post_simple[:,i]
         var_post = trajectories_var_post_simple[:,i]
         n_points = len(trajectory_post)
@@ -177,24 +189,32 @@ if __name__ == '__main__':
     steps = np.arange(1, steps_forward+1)
     plt.figure()
     plt.plot(steps, rmse_post)
+    plt.plot(steps, rmse_post_homoscedastic)
     plt.plot(steps, rmse_post_simple)
     plt.xlabel('Number of steps predicted forward')
     plt.ylabel('RMSE of prediction')
+    plt.legend(['Heteroscedastic prior GP', 'Homoscedastic prior GP', 'Constant prior'])
     plt.figure()
     plt.plot(steps, mae_post)
+    plt.plot(steps, mae_post_homoscedastic)
     plt.plot(steps, mae_post_simple)
     plt.xlabel('Number of steps predicted forward')
     plt.ylabel('MAE of prediction')
+    plt.legend(['Heteroscedastic prior GP', 'Homoscedastic prior GP', 'Constant prior'])
     plt.figure()
     plt.plot(steps, re_post)
+    plt.plot(steps, re_post_homoscedastic)
     plt.plot(steps, re_post_simple)
     plt.xlabel('Number of steps predicted forward')
     plt.ylabel('RE of prediction interval for alpha=0.1')
+    plt.legend(['Heteroscedastic prior GP', 'Homoscedastic prior GP', 'Constant prior'])
     plt.figure()
     plt.plot(steps, score_post)
+    plt.plot(steps, score_post_homoscedastic)
     plt.plot(steps, score_post_simple)
     plt.xlabel('Number of steps predicted forward')
     plt.ylabel('Interval score of prediction interval for alpha=0.1')
+    plt.legend(['Heteroscedastic prior GP', 'Homoscedastic prior GP', 'Constant prior'])
 
     rmse_direct = np.zeros(steps_forward)
     mae_direct = np.zeros(steps_forward)

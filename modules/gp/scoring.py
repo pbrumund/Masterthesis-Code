@@ -46,6 +46,12 @@ def get_interval_score(alpha, trajectory_measured, trajectory_predicted, var_pre
     S_alpha_int = interval_width + 2/alpha*err_under + 2/alpha*err_over
     return np.mean(S_alpha_int)
 
+def get_nlpd(trajectory_measured, trajectory_predicted, var_predicted):
+    std_predicted = np.sqrt(var_predicted)
+    z = (trajectory_measured - trajectory_predicted)/std_predicted
+    log_density = norm.logpdf(z)
+    return np.sum(-log_density)
+
 def get_trajectory_measured(weather_data, opt):
     t_start = opt['t_start_score']
     t_end = opt['t_end_score']
@@ -152,6 +158,44 @@ def get_posterior_trajectories(opt):
             np.savetxt(file, trajectory_var_gp.reshape((1,-1)))    
     return trajectories_mean, trajectories_var
 
+def get_posterior_trajectories_homoscedastic(opt):
+    try:
+        trajectories_mean = np.loadtxt(f'modules/gp/scoring/trajectories_mean_post_{opt["n_last"]}_homoscedastic.csv')
+        trajectories_var = np.loadtxt(f'modules/gp/scoring/trajectories_var_post_{opt["n_last"]}_homoscedastic.csv')
+        n_calculated = trajectories_var.shape[0]
+        t_start = opt['t_start_score'] + n_calculated*datetime.timedelta(minutes=10)
+        t_end = opt['t_end_score'] - opt['steps_forward']*datetime.timedelta(minutes=10)
+        if t_start >= t_end: return trajectories_mean, trajectories_var
+
+    except:
+        t_start = opt['t_start_score']
+        t_end = opt['t_end_score'] - opt['steps_forward']*datetime.timedelta(minutes=10)
+
+    gp = HomoscedasticTimeseriesModel(opt)
+
+    dt = t_end-t_start
+    n_times = int(dt.total_seconds()/600)
+    times = [t_start+i*datetime.timedelta(minutes=10) for i in range(n_times)]
+
+    trajectories_mean = np.zeros((n_times, opt['steps_forward']))
+    trajectories_var = np.zeros((n_times, opt['steps_forward']))
+
+    for i, time in enumerate(times):
+        if time.minute == 0 or i==0:
+            train = True
+            print(f'Training timeseries GP for time {time}')
+        else:
+            train = False
+        trajectory_mean_gp, trajectory_var_gp = gp.predict_trajectory(
+            time, opt['steps_forward'], train, include_last_measurement=False)
+        trajectories_mean[i,:] = trajectory_mean_gp
+        trajectories_var[i,:] = trajectory_var_gp
+        with open(f'modules/gp/scoring/trajectories_mean_post_{opt["n_last"]}_homoscedastic.csv', 'a') as file:
+            np.savetxt(file, trajectory_mean_gp.reshape((1,-1)))
+        with open(f'modules/gp/scoring/trajectories_var_post_{opt["n_last"]}_homoscedastic.csv', 'a') as file:
+            np.savetxt(file, trajectory_var_gp.reshape((1,-1)))    
+    return trajectories_mean, trajectories_var
+
 def get_simple_timeseries_traj(opt):
     try:
         trajectories_mean = np.loadtxt('modules/gp/scoring/trajectories_mean_simple_timeseries.csv')
@@ -189,6 +233,7 @@ def get_simple_timeseries_traj(opt):
         with open('modules/gp/scoring/trajectories_var_simple_timeseries.csv', 'a') as file:
             np.savetxt(file, trajectory_var_gp.reshape((1,-1)))    
     return trajectories_mean, trajectories_var
+
 def get_direct_model_trajectories(opt):
     try:
         trajectories_mean = np.loadtxt('modules/gp/scoring/trajectories_mean_direct.csv')
