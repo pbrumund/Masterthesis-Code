@@ -104,7 +104,7 @@ class TimeseriesModel(WindPredictionGP):
         see https://gpflow.github.io/GPflow/develop/notebooks/advanced/heteroskedastic.html
         """
         # TODO: Get a simpler model (homoscedastic or simple time series) for comparison
-        self.filename_gp = f'modules/gp/models/gp_prior_{self.opt["n_z"]}_without_time2'
+        self.filename_gp = f'modules/gp/models/gp_prior_{self.opt["n_z"]}'
         try:
             gp_prior = tf.saved_model.load(self.filename_gp)
             if self.opt['verbose']:
@@ -142,7 +142,7 @@ class TimeseriesModel(WindPredictionGP):
             # + gpf.kernels.Periodic(
             #     gpf.kernels.SquaredExponential(active_dims=[n_inputs-1]), period=1)
             )
-        # gpf.set_trainable(kernel_mean.submodules[6].period, False)
+        # gpf.set_trainable(kernel_mean.submodules[7].period, False)
         # gpf.set_trainable(kernel_mean.submodules[7+1].period, False)
         kernel_var = (
             kernels_nwp_var
@@ -152,7 +152,7 @@ class TimeseriesModel(WindPredictionGP):
             # + gpf.kernels.Periodic(
             #     gpf.kernels.SquaredExponential(active_dims=[n_inputs-1]), period=1)
                 )
-        # gpf.set_trainable(kernel_var.submodules[6].period, False)
+        # gpf.set_trainable(kernel_var.submodules[7].period, False)
         # gpf.set_trainable(kernel_var.submodules[7+1].period, False)
         kernel = gpf.kernels.SeparateIndependent(
             [

@@ -12,6 +12,7 @@ from modules.plotting import TimeseriesPlot
 from modules.mpc_scoring import DataSaving
 from modules.mpc import LowLevelController
 
+plot = True
 ohps = OHPS()
 
 mpc_opt = get_mpc_opt(N=30)
@@ -42,15 +43,17 @@ P_demand_last = None
 v_last = None
 
 # # create plots
-# plt_power = TimeseriesPlot('Time', 'Power output', 
-#     ['Gas turbine', 'Battery', 'Wind turbine', 'Total power generation', 'Demand'], 
-#     title='Nominal MPC with NWP forecast, power output')
-# plt_SOC = TimeseriesPlot('Time', 'Battery SOC', title='Nominal MPC with NWP forecast, Battery SOC')
-# plt_inputs = TimeseriesPlot('Time', 'Control input', ['Gas turbine power', 'Battery current'],
-#                             title='Nominal MPC with NWP forecast, Control inputs')
+if plot:
+    plt_power = TimeseriesPlot('Time', 'Power output', 
+        ['Gas turbine', 'Battery', 'Wind turbine', 'Total power generation', 'Demand'], 
+        title='Nominal MPC with NWP forecast, power output')
+    plt_SOC = TimeseriesPlot('Time', 'Battery SOC', title='Nominal MPC with NWP forecast, Battery SOC')
+    plt_inputs = TimeseriesPlot('Time', 'Control input', ['Gas turbine power', 'Battery current'],
+                            title='Nominal MPC with NWP forecast, Control inputs')
 
 # save trajectories to file
 dims = {'Power output': 4, 'Power demand': 1, 'SOC': 1, 'Inputs': 2}
+mpc_opt['llc_penalize_i'] = True
 data_saver = DataSaving('nominal_mpc_nwp_forecast', mpc_opt, gp_opt, dims)
 
 # load trajectories if possible
@@ -114,9 +117,10 @@ for k, t in enumerate(times, start=start):
     P_traj[k,:] = ca.vertcat(P_gtg, P_bat, P_wtg, P_total, P_demand[0])
     SOC_traj[k] = ohps.get_SOC_bat(x_k, u_k, w_k)
 
-    # plt_inputs.plot(times_plot[:k], u_traj[:k,:])
-    # plt_power.plot(times_plot[:k], P_traj[:k,:])
-    # plt_SOC.plot(times_plot[:k], SOC_traj[:k])
+    if plot:
+        plt_inputs.plot(times_plot[:k], u_traj[:k,:])
+        plt_power.plot(times_plot[:k], P_traj[:k,:])
+        plt_SOC.plot(times_plot[:k], SOC_traj[:k])
     
     # save data
     P_k = ca.horzcat(P_gtg, P_bat, P_wtg, P_total)

@@ -94,8 +94,9 @@ class DataHandler():
                                 /self.weather_data['std']['wind_speed_10m_sh'])
         wind_speed_of_gust = ((wind_speed_of_gust - self.weather_data['means']['wind_speed_of_gust_diff_sh'])
                             /self.weather_data['std']['wind_speed_of_gust_diff_sh'])
+        time_since_pred = self.get_time_since_forecast(time, steps_ahead)
         NWP_values = [
-            wind_prediction_at_step, wind_speed_of_gust, sqrt_cape, temperature, humidity, pressure
+            wind_prediction_at_step, wind_speed_of_gust, sqrt_cape, temperature, humidity, pressure, time_since_pred
             ]
         # Next hour
         if '3 steps' in feature:
@@ -149,15 +150,13 @@ class DataHandler():
         elif feature == 'nwp & time':
             # add time in days
             dt = time+steps_ahead*datetime.timedelta(minutes=self.dt_meas)-self.weather_data['times_meas'][0]
-            t_out = dt.total_seconds()/(60*60*24)
-            time_since_pred = self.get_time_since_forecast(time, steps_ahead)
-            return np.concatenate([NWP_values, [time_since_pred, t_out]])
+            t_out = dt.total_seconds()/(60*60*24)            
+            return np.concatenate([NWP_values, [t_out]])
         elif feature == 'nwp 3 steps & time':
             # add time in days
             dt = time+steps_ahead*datetime.timedelta(minutes=self.dt_meas)-self.weather_data['times_meas'][0]
             t_out = dt.total_seconds()/(60*60*24)
-            time_since_pred = self.get_time_since_forecast(time, steps_ahead)
-            return np.concatenate([NWP_values+NWP_values_previous_next, [time_since_pred, t_out]])
+            return np.concatenate([NWP_values+NWP_values_previous_next, [t_out]])
         # TODO: Add time since forecast release, sample from medium/long horizon as well
         # Only autoregressive models
         measurements = np.zeros(n_last)
@@ -182,28 +181,24 @@ class DataHandler():
             # add time in days
             dt = time+steps_ahead*datetime.timedelta(minutes=self.dt_meas)-self.weather_data['times_meas'][0]
             t_out = dt.total_seconds()/(60*60*24)
-            time_since_pred = self.get_time_since_forecast(time, steps_ahead)
-            return np.concatenate([errors, np.append(NWP_values + [time_since_pred], t_out)])
+            return np.concatenate([errors, np.append(NWP_values, t_out)])
         elif feature == 'error & nwp 3 steps & time':
             # add time in days
             dt = time+steps_ahead*datetime.timedelta(minutes=self.dt_meas)-self.weather_data['times_meas'][0]
             t_out = dt.total_seconds()/(60*60*24)
-            time_since_pred = self.get_time_since_forecast(time, steps_ahead)
-            return np.concatenate([errors, np.append(NWP_values+NWP_values_previous_next+time_since_pred, t_out)])
+            return np.concatenate([errors, np.append(NWP_values+NWP_values_previous_next, t_out)])
         elif feature == 'measurement & nwp':
             return np.concatenate([measurements, NWP_values])
         elif feature == 'measurement & nwp & time':
             # add time in days
             dt = time+steps_ahead*datetime.timedelta(minutes=self.dt_meas)-self.weather_data['times_meas'][0]
             t_out = dt.total_seconds()/(60*60*24)
-            time_since_pred = self.get_time_since_forecast(time, steps_ahead)
-            return np.concatenate([measurements, np.append(NWP_values + [time_since_pred], t_out)])
+            return np.concatenate([measurements, np.append(NWP_values, t_out)])
         elif feature == 'measurement & nwp 3 steps & time':
             # add time in days
             dt = time+steps_ahead*datetime.timedelta(minutes=self.dt_meas)-self.weather_data['times_meas'][0]
             t_out = dt.total_seconds()/(60*60*24)
-            time_since_pred = self.get_time_since_forecast(time, steps_ahead)
-            return np.concatenate([measurements, np.append(NWP_values+NWP_values_previous_next+[time_since_pred], t_out)])
+            return np.concatenate([measurements, np.append(NWP_values+NWP_values_previous_next, t_out)])
         else:
             raise ValueError('Unknown value for input feature')
         

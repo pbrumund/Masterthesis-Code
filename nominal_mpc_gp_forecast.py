@@ -13,6 +13,8 @@ from modules.plotting import TimeseriesPlot
 from modules.mpc_scoring import DataSaving
 from modules.mpc import LowLevelController
 
+plot = True
+plot_predictions = False
 ohps = OHPS()
 
 mpc_opt = get_mpc_opt(N=30)
@@ -43,14 +45,16 @@ P_gtg_last = ohps.gtg.bounds['ubu']
 P_demand_last = None
 
 # # create plots
-# plt_power = TimeseriesPlot('Time', 'Power output', #
-#     ['Gas turbine', 'Battery', 'Wind turbine', 'Total power generation', 'Demand'],
-#     title='Nominal MPC with GP forecast, power output')
-# plt_SOC = TimeseriesPlot('Time', 'Battery SOC', title='Nominal MPC with GP forecast, Battery SOC')
-# plt_inputs = TimeseriesPlot('Time', 'Control input', ['Gas turbine power', 'Battery current'],
-#                             title='Nominal MPC with GP forecast, control inputs')
-# plt_gp = TimeseriesPlot('Time', 'Wind power (kW)', ['NWP', 'Measurements', 'GP Prediction'], 
-#                         title='Nominal MPC with GP forecast, wind power predictions')
+if plot:
+    plt_power = TimeseriesPlot('Time', 'Power output', #
+        ['Gas turbine', 'Battery', 'Wind turbine', 'Total power generation', 'Demand'],
+        title='Nominal MPC with GP forecast, power output')
+    plt_SOC = TimeseriesPlot('Time', 'Battery SOC', title='Nominal MPC with GP forecast, Battery SOC')
+    plt_inputs = TimeseriesPlot('Time', 'Control input', ['Gas turbine power', 'Battery current'],
+                                title='Nominal MPC with GP forecast, control inputs')
+    if plot_predictions:
+        plt_gp = TimeseriesPlot('Time', 'Wind power (kW)', ['NWP', 'Measurements', 'GP Prediction'], 
+                                title='Nominal MPC with GP forecast, wind power predictions')
 
 # save trajectories to file
 dims = {'Power output': 4, 'Power demand': 1, 'SOC': 1, 'Inputs': 2}
@@ -128,26 +132,27 @@ for k, t in enumerate(times, start=start):
     P_traj[k,:] = ca.vertcat(P_gtg, P_bat, P_wtg, P_total, P_demand[0])
     SOC_traj[k] = ohps.get_SOC_bat(x_k, u_k, w_k)
 
-    # plt_inputs.plot(times_plot[:k], u_traj[:k,:])
-    # plt_power.plot(times_plot[:k], P_traj[:k,:])
-    # plt_SOC.plot(times_plot[:k], SOC_traj[:k])
-
-    # # Plot wind power
-    # wind_power_NWP = np.array([ohps.n_wind_turbines*ohps.wind_turbine.power_curve_fun(
-    #     ohps.wind_turbine.scale_wind_speed(w)) for w in wind_speeds_nwp]).reshape(-1)
-    # wind_speeds_meas = [data_handler.get_measurement(t,i) for i in range(nominal_mpc.horizon)]
-    # wind_power_meas = np.array([ohps.n_wind_turbines*ohps.wind_turbine.power_curve_fun(
-    #     ohps.wind_turbine.scale_wind_speed(w)) for w in wind_speeds_meas]).reshape(-1)
-    # wind_power_gp = np.array([ohps.n_wind_turbines*ohps.wind_turbine.power_curve_fun(
-    #     ohps.wind_turbine.scale_wind_speed(w)) for w in wind_speeds_gp]).reshape(-1)
-    # wind_power_gp_lb = np.array([ohps.n_wind_turbines*ohps.wind_turbine.power_curve_fun(
-    #     ohps.wind_turbine.scale_wind_speed(w)) 
-    #     for w in (np.array(wind_speeds_gp)-np.sqrt(np.array(gp_var)))]).reshape(-1)
-    # wind_power_gp_ub = np.array([ohps.n_wind_turbines*ohps.wind_turbine.power_curve_fun(
-    #     ohps.wind_turbine.scale_wind_speed(w)) 
-    #     for w in (np.array(wind_speeds_gp)+np.sqrt(np.array(gp_var)))]).reshape(-1)
-    # gp_times = [t + i*datetime.timedelta(minutes=mpc_opt['dt']) for i in range(mpc_opt['N'])]
-    # plt_gp.plot(gp_times, [wind_power_NWP, wind_power_meas, wind_power_gp])
+    if plot:
+        plt_inputs.plot(times_plot[:k], u_traj[:k,:])
+        plt_power.plot(times_plot[:k], P_traj[:k,:])
+        plt_SOC.plot(times_plot[:k], SOC_traj[:k])
+        if plot_predictions:
+        # Plot wind power
+            wind_power_NWP = np.array([ohps.n_wind_turbines*ohps.wind_turbine.power_curve_fun(
+                ohps.wind_turbine.scale_wind_speed(w)) for w in wind_speeds_nwp]).reshape(-1)
+            wind_speeds_meas = [data_handler.get_measurement(t,i) for i in range(nominal_mpc.horizon)]
+            wind_power_meas = np.array([ohps.n_wind_turbines*ohps.wind_turbine.power_curve_fun(
+                ohps.wind_turbine.scale_wind_speed(w)) for w in wind_speeds_meas]).reshape(-1)
+            wind_power_gp = np.array([ohps.n_wind_turbines*ohps.wind_turbine.power_curve_fun(
+                ohps.wind_turbine.scale_wind_speed(w)) for w in wind_speeds_gp]).reshape(-1)
+            wind_power_gp_lb = np.array([ohps.n_wind_turbines*ohps.wind_turbine.power_curve_fun(
+                ohps.wind_turbine.scale_wind_speed(w)) 
+                for w in (np.array(wind_speeds_gp)-np.sqrt(np.array(gp_var)))]).reshape(-1)
+            wind_power_gp_ub = np.array([ohps.n_wind_turbines*ohps.wind_turbine.power_curve_fun(
+                ohps.wind_turbine.scale_wind_speed(w)) 
+                for w in (np.array(wind_speeds_gp)+np.sqrt(np.array(gp_var)))]).reshape(-1)
+            gp_times = [t + i*datetime.timedelta(minutes=mpc_opt['dt']) for i in range(mpc_opt['N'])]
+            plt_gp.plot(gp_times, [wind_power_NWP, wind_power_meas, wind_power_gp])
 
     # Print out current SOC and power outputs
     print(f'time: {t.strftime("%d.%m.%Y %H:%M")}: Battery SOC: {SOC_traj[k]}')

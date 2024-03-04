@@ -69,57 +69,57 @@ class DirectGP(WindPredictionGP):
             scale_transform=tfp.bijectors.Exp())
         
         # Kernel for last measurements
-        # kernel_measurements_mean = gpf.kernels.Sum(
-        #     [gpf.kernels.SquaredExponential(lengthscales=[1], active_dims=[i]) 
-        #      for i in range(0, n_measurement_inputs)]
-        # )
+        kernel_measurements_mean = gpf.kernels.Sum(
+            [gpf.kernels.RationalQuadratic(lengthscales=[1], active_dims=[i]) 
+             for i in range(0, n_measurement_inputs)]
+        )
         # kernel_measurements_mean = gpf.kernels.SquaredExponential(
         #     lengthscales=[1]*n_measurement_inputs)
 
-        # kernel_measurements_var = gpf.kernels.Sum(
-        #     [gpf.kernels.SquaredExponential(lengthscales=[.3], active_dims=[i]) 
-        #      for i in range(0, n_measurement_inputs)]
-        # )
+        kernel_measurements_var = gpf.kernels.Sum(
+            [gpf.kernels.RationalQuadratic(lengthscales=[.3], active_dims=[i]) 
+             for i in range(0, n_measurement_inputs)]
+        )
         # kernel_measurements_var = gpf.kernels.SquaredExponential(
         #     lengthscales=[1]*n_measurement_inputs)
         
-        # kernel_nwp_mean = gpf.kernels.Sum(
-        #     [gpf.kernels.SquaredExponential(lengthscales=[1], active_dims=[i]) 
-        #      for i in range(n_measurement_inputs, n_inputs-1)]
-        # )
+        kernel_nwp_mean = gpf.kernels.Sum(
+            [gpf.kernels.RationalQuadratic(lengthscales=[1], active_dims=[i]) 
+             for i in range(n_measurement_inputs, n_inputs)]
+        )
         # kernel_nwp_mean = gpf.kernels.SquaredExponential(
         #     lengthscales=[1]*n_nwp_inputs)
         
-        # kernel_nwp_var = gpf.kernels.Sum(
-        #     [gpf.kernels.SquaredExponential(lengthscales=[.3], active_dims=[i]) 
-        #      for i in range(n_measurement_inputs, n_inputs-1)]
-        # )
+        kernel_nwp_var = gpf.kernels.Sum(
+            [gpf.kernels.RationalQuadratic(lengthscales=[.3], active_dims=[i]) 
+             for i in range(n_measurement_inputs, n_inputs)]
+        )
 
         # kernel_nwp_var = gpf.kernels.SquaredExponential(
         #     lengthscales=[1]*n_nwp_inputs)
-        kernel_mean_se = gpf.kernels.SquaredExponential(
-            lengthscales=[1]*(n_inputs-1), active_dims = range(n_inputs-1)
-        )
-        kernel_var_se = gpf.kernels.SquaredExponential(
-            lengthscales=[1]*(n_inputs-1), active_dims = range(n_inputs-1)
-        )
+        # kernel_mean_se = gpf.kernels.SquaredExponential(
+        #     lengthscales=[1]*(n_inputs-1), active_dims = range(n_inputs-1)
+        # )
+        # kernel_var_se = gpf.kernels.SquaredExponential(
+        #     lengthscales=[1]*(n_inputs-1), active_dims = range(n_inputs-1)
+        # )
         kernel_mean = (
-            kernel_mean_se
-            # kernel_measurements_mean
-            # * (kernel_nwp_mean
-            + gpf.kernels.Periodic(
-                gpf.kernels.SquaredExponential(active_dims=[n_inputs-1]), period=365) 
+            # kernel_mean_se
+            kernel_measurements_mean
+             + kernel_nwp_mean
+            # + gpf.kernels.Periodic(
+            #     gpf.kernels.SquaredExponential(active_dims=[n_inputs-1]), period=365) 
             # + gpf.kernels.Periodic(
             #     gpf.kernels.SquaredExponential(active_dims=[n_inputs-1]), period=1))
             )
         # gpf.set_trainable(kernel_mean.submodules[9].period, False)
         # gpf.set_trainable(kernel_mean.submodules[10].period, False)
         kernel_var = (
-            kernel_var_se
-            # kernel_measurements_var
-            # * (kernel_nwp_var
-            + gpf.kernels.Periodic(
-                gpf.kernels.SquaredExponential(active_dims=[n_inputs-1]), period=365) 
+        #     kernel_var_
+            kernel_measurements_var
+            + kernel_nwp_var
+            # + gpf.kernels.Periodic(
+            #     gpf.kernels.SquaredExponential(active_dims=[n_inputs-1]), period=365) 
             # + gpf.kernels.Periodic(
             #     gpf.kernels.SquaredExponential(active_dims=[n_inputs-1]), period=1)
             )
