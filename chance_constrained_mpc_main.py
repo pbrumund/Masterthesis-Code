@@ -14,7 +14,7 @@ from modules.mpc_scoring import DataSaving
 from modules.mpc import LowLevelController
 
 plot = True
-plot_predictions = False
+plot_predictions = True
 ohps = OHPS()
 
 mpc_opt = get_mpc_opt(N=30)#, t_start=datetime.datetime(2022,12,6), t_end=datetime.datetime(2022,12,8))

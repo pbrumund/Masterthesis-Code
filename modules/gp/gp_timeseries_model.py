@@ -306,7 +306,7 @@ class TimeseriesModel(WindPredictionGP):
         s = tf.get_static_value(steps, partial=True)
         steps = float(s[0])
         
-        if False:#steps < 0:
+        if steps < 0:
             # time before current time, training
             t = time+steps*datetime.timedelta(minutes=self.opt['dt_meas'])
             x = self.data_handler.generate_features(
@@ -332,12 +332,12 @@ class TimeseriesModel(WindPredictionGP):
         times = [t_start + i*datetime.timedelta(minutes=self.opt['dt_meas']) for i in range(n_last)]
 
         for i, t in enumerate(times):
-            # measurement = self.data_handler.get_measurement(t, 0)
-            # prediction = self.data_handler.get_NWP(prediction_time, 
-            #     (t-prediction_time).total_seconds()/(60*self.opt['dt_meas']))
-            # y_train[i] = measurement - prediction
-            y_train[i] = self.data_handler.generate_labels(
-                prediction_time, steps_ahead=X_train.numpy().reshape(-1)[i]-1)
+            measurement = self.data_handler.get_measurement(t, 0)
+            prediction = self.data_handler.get_NWP(prediction_time, 
+                (t-prediction_time).total_seconds()/(60*self.opt['dt_meas']))
+            y_train[i] = measurement - prediction
+            # y_train[i] = self.data_handler.generate_labels(
+            #     prediction_time, steps_ahead=X_train.numpy().reshape(-1)[i]-1)
         self.y_train_timeseries = y_train
         if self.timeseries_gp_param is None:
             self.first_train = True

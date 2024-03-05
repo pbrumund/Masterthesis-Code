@@ -160,7 +160,7 @@ if __name__ == '__main__':
     # trajectories_mean_post = np.loadtxt('gp/scoring/trajectories_mean_post.csv')
     # trajectories_var_post = np.loadtxt('gp/scoring/trajectories_var_post.csv')
     # first dimension: time of prediction, second dimension: number of steps forward
-    # n_points = len(trajectory_measured)
+    n_points = len(trajectory_measured)
     alpha = 0.1
     for i in range(opt['steps_forward']):
         trajectory_post = trajectories_mean_post[:,i]

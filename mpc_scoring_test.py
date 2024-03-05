@@ -62,21 +62,21 @@ print(f'Multi-stage with simple scenarios: {error_abs_ms_simple} MWh total error
 print(f'GTG power: {P_gtg_abs}, {P_gtg_rel*100}% of total generated power')
 print(f'Mean power demand of GTG: {P_in_gtg}, average efficiency: {eta_gtg}')
 
-mpc_opt['use_simple_scenarios'] = False
-error_abs_ms, error_rel_ms = get_power_error('multi-stage_mpc', mpc_opt, gp_opt)
-P_gtg_abs, P_gtg_rel = get_gtg_power('multi-stage_mpc', mpc_opt, gp_opt)
-P_in_gtg, eta_gtg = get_gtg_emissions('multi-stage_mpc', mpc_opt, gp_opt)
-print(f'Multi-stage: {error_abs_ms} MWh total error, {100*error_rel_ms}% of demand')
-print(f'GTG power: {P_gtg_abs}, {P_gtg_rel*100}% of total generated power')
-print(f'Mean power demand of GTG: {P_in_gtg}, average efficiency: {eta_gtg}')
+# mpc_opt['use_simple_scenarios'] = False
+# error_abs_ms, error_rel_ms = get_power_error('multi-stage_mpc', mpc_opt, gp_opt)
+# P_gtg_abs, P_gtg_rel = get_gtg_power('multi-stage_mpc', mpc_opt, gp_opt)
+# P_in_gtg, eta_gtg = get_gtg_emissions('multi-stage_mpc', mpc_opt, gp_opt)
+# print(f'Multi-stage: {error_abs_ms} MWh total error, {100*error_rel_ms}% of demand')
+# print(f'GTG power: {P_gtg_abs}, {P_gtg_rel*100}% of total generated power')
+# print(f'Mean power demand of GTG: {P_in_gtg}, average efficiency: {eta_gtg}')
 
 
-mpc_opt['use_simple_scenarios'] = True
-mpc_opt['dE_min'] = 0
-error_abs_ms, error_rel_ms = get_power_error('multi-stage_mpc', mpc_opt, gp_opt)
-P_gtg_abs, P_gtg_rel = get_gtg_power('multi-stage_mpc', mpc_opt, gp_opt)
-P_in_gtg, eta_gtg = get_gtg_emissions('multi-stage_mpc', mpc_opt, gp_opt)
-print(f'Multi-stage: {error_abs_ms} MWh total error, {100*error_rel_ms}% of demand')
-print(f'GTG power: {P_gtg_abs}, {P_gtg_rel*100}% of total generated power')
-print(f'Mean power demand of GTG: {P_in_gtg}, average efficiency: {eta_gtg}')
+# mpc_opt['use_simple_scenarios'] = True
+# mpc_opt['dE_min'] = 0
+# error_abs_ms, error_rel_ms = get_power_error('multi-stage_mpc', mpc_opt, gp_opt)
+# P_gtg_abs, P_gtg_rel = get_gtg_power('multi-stage_mpc', mpc_opt, gp_opt)
+# P_in_gtg, eta_gtg = get_gtg_emissions('multi-stage_mpc', mpc_opt, gp_opt)
+# print(f'Multi-stage: {error_abs_ms} MWh total error, {100*error_rel_ms}% of demand')
+# print(f'GTG power: {P_gtg_abs}, {P_gtg_rel*100}% of total generated power')
+# print(f'Mean power demand of GTG: {P_in_gtg}, average efficiency: {eta_gtg}')
 
