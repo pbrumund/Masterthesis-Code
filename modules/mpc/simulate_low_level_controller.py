@@ -32,7 +32,7 @@ class LowLevelController:
         P_wtg = ca.vertcat(*P_wtg)
         P_bat = ca.vertcat(*P_bat)
 
-        f = 1000*ca.sumsqr(P_demand - P_gtg - P_wtg - P_bat - s_P) + 0.1*ca.sumsqr(P_gtg-P_gtg_init) + 0.01*ca.sumsqr(i-i_init)
+        f = 1000*ca.sumsqr(P_demand - P_gtg - P_wtg - P_bat - s_P) + 0.1*ca.sumsqr(P_gtg-P_gtg_init) #+ 0.01*ca.sumsqr(i-i_init)
         v = ca.vertcat(x, i, P_gtg)
         v_lb = ca.vertcat(self.ohps.battery.bounds['lbx']*ca.DM.ones(self.n_intervals+1),
                           self.ohps.battery.bounds['lbu']*ca.DM.ones(self.n_intervals),

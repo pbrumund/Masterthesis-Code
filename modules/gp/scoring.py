@@ -258,7 +258,7 @@ def get_direct_model_trajectories(opt):
 
     for i, time in enumerate(times):
         trajectory_mean_gp, trajectory_var_gp = gp.predict_trajectory(
-            time, opt['steps_forward'])
+            time, opt['steps_forward'], include_last_measurement=False)
         trajectories_mean[i,:] = trajectory_mean_gp
         trajectories_var[i,:] = trajectory_var_gp
         with open('modules/gp/scoring/trajectories_mean_direct.csv', 'a') as file:
