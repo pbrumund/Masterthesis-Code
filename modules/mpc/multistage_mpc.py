@@ -406,6 +406,10 @@ class TreeNode:
             self.is_root_node = True
         else:
             self.is_root_node = False
+        if time_index == opt['N']-1:
+            self.is_leaf_node = True
+        else:
+            self.is_leaf_node = False
         self.opt = opt
         if self.opt['use_chance_constraints_multistage']:
             epsilon = self.opt['epsilon_chance_constraint']
@@ -427,6 +431,9 @@ class TreeNode:
         self.x = ca.MX.sym(f'x_{self.time_index}_{self.node_index}', self.ohps.nx)
         self.x_lb = self.ohps.lbx
         self.x_ub = self.ohps.ubx
+        if self.is_root_node: # No state constraint on root node for feasibility
+            self.x_lb = -ca.inf*ca.DM.ones(self.ohps.nx)
+            self.x_ub = ca.inf*ca.DM.ones(self.ohps.nx)
         self.s_P = ca.MX.sym(f's_P_{self.time_index}_{self.node_index}')
         self.s_P_lb = -ca.inf
         self.s_P_ub = ca.inf
@@ -481,6 +488,13 @@ class TreeNode:
         self.constraints.append(state_constraint)
         g_lb.append(state_constraint_lb)
         g_ub.append(state_constraint_ub)
+        if self.is_leaf_node: # State constraints for successor of root node
+            x_next = self.ohps.get_next_state(self.x, self.u)
+            x_next_lb = self.ohps.lbx
+            x_next_ub = self.ohps.ubx
+            self.constraints.append(x_next)
+            g_lb.append(x_next_lb)
+            g_ub.append(x_next_ub)
         # Use chance constraints if wanted
         if self.wind_pred is not None:
             wind_speed = self.wind_pred[0] # use numerical value

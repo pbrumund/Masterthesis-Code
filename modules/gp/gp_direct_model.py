@@ -17,7 +17,7 @@ class DirectGP(WindPredictionGP):
         self.opt = opt
         self.steps_ahead = steps_ahead
         self.order = opt['direct_model_order']
-        self.filename_gp = f'modules/gp/models/direct_model/gp_direct_{self.steps_ahead}'
+        self.filename_gp = f'modules/gp/models/direct_model_only_nwp/gp_direct_{self.steps_ahead}'
         self.gp = self.load_gp_model()
         if self.gp is None:
             super().__init__(opt) # load data handler
@@ -85,14 +85,14 @@ class DirectGP(WindPredictionGP):
         
         kernel_nwp_mean = gpf.kernels.Sum(
             [gpf.kernels.RationalQuadratic(lengthscales=[1], active_dims=[i]) 
-             for i in range(n_measurement_inputs, n_inputs)]
+             for i in range(n_measurement_inputs, n_inputs-1)]
         )
         # kernel_nwp_mean = gpf.kernels.SquaredExponential(
         #     lengthscales=[1]*n_nwp_inputs)
         
         kernel_nwp_var = gpf.kernels.Sum(
             [gpf.kernels.RationalQuadratic(lengthscales=[.3], active_dims=[i]) 
-             for i in range(n_measurement_inputs, n_inputs)]
+             for i in range(n_measurement_inputs, n_inputs-1)]
         )
 
         # kernel_nwp_var = gpf.kernels.SquaredExponential(

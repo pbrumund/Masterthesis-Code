@@ -12,18 +12,34 @@ matplotlib.rcParams.update({
 #plt.ion()
 cm = 1/2.54
 
+"""Measurements over predictions"""
+predictions = np.loadtxt('../Abbildungen/data_analysis/wind_predictions_uncorrected.csv')
+measurements = np.loadtxt('../Abbildungen/data_analysis/wind_measurements_2021.csv')
+fig, axs = plt.subplots()
+import random
+indices = random.sample(range(measurements.shape[0]), 500)
+axs.scatter(predictions[indices], measurements[indices],marker='x')
+axs.plot(measurements[indices], measurements[indices],'--', color='black')
+axs.plot(measurements[indices], measurements[indices]*np.mean(measurements)/np.mean(predictions), color='tab:orange')
+axs.set_xlabel('Predicted wind speed (m/s)')
+axs.set_ylabel('Measured wind speed (m/s)')
+axs.grid()
+fig.set_size_inches(10*cm, 7*cm)
+plt.savefig('../Abbildungen/meas_over_pred.pgf', bbox_inches='tight')
+
+
 """Error mean and variance over prediction"""
-x_wind_speed = np.loadtxt('../Abbildungen/data_analysis/error_wind_speed_x.csv')
-mean_wind_speed = np.loadtxt('../Abbildungen/data_analysis/error_wind_speed_mean.csv')
-std_wind_speed = np.loadtxt('../Abbildungen/data_analysis/error_wind_speed_std.csv')
+x_wind_speed = np.loadtxt('../Abbildungen/data_analysis/error_wind_speed_x_2021.csv')
+mean_wind_speed = np.loadtxt('../Abbildungen/data_analysis/error_wind_speed_mean_2021.csv')
+std_wind_speed = np.loadtxt('../Abbildungen/data_analysis/error_wind_speed_std_2021.csv')
 
-x_wind_gust = np.loadtxt('../Abbildungen/data_analysis/error_gust_x.csv')
-mean_wind_gust = np.loadtxt('../Abbildungen/data_analysis/error_gust_mean.csv')
-std_wind_gust = np.loadtxt('../Abbildungen/data_analysis/error_gust_std.csv')
+x_wind_gust = np.loadtxt('../Abbildungen/data_analysis/error_gust_x_2021.csv')
+mean_wind_gust = np.loadtxt('../Abbildungen/data_analysis/error_gust_mean_2021.csv')
+std_wind_gust = np.loadtxt('../Abbildungen/data_analysis/error_gust_std_2021.csv')
 
-x_wind_gust_diff = np.loadtxt('../Abbildungen/data_analysis/error_gust_diff_x.csv')
-mean_wind_gust_diff = np.loadtxt('../Abbildungen/data_analysis/error_gust_diff_mean.csv')
-std_wind_gust_diff = np.loadtxt('../Abbildungen/data_analysis/error_gust_diff_std.csv')
+x_wind_gust_diff = np.loadtxt('../Abbildungen/data_analysis/error_gust_diff_x_2021.csv')
+mean_wind_gust_diff = np.loadtxt('../Abbildungen/data_analysis/error_gust_diff_mean_2021.csv')
+std_wind_gust_diff = np.loadtxt('../Abbildungen/data_analysis/error_gust_diff_std_2021.csv')
 
 fig, axs = plt.subplots(1, 3, layout="constrained", sharey=True)
 ax = axs[0]
@@ -53,21 +69,21 @@ fig.set_size_inches(12*cm, 5*cm)
 plt.savefig('../Abbildungen/error_over_wind_speed.pgf', bbox_inches='tight')
 
 # Other NWP values
-x_p = np.loadtxt('../Abbildungen/data_analysis/error_pressure_x.csv')
-mean_p = np.loadtxt('../Abbildungen/data_analysis/error_pressure_mean.csv')
-std_p = np.loadtxt('../Abbildungen/data_analysis/error_pressure_std.csv')
+x_p = np.loadtxt('../Abbildungen/data_analysis/error_pressure_x_2021.csv')
+mean_p = np.loadtxt('../Abbildungen/data_analysis/error_pressure_mean_2021.csv')
+std_p = np.loadtxt('../Abbildungen/data_analysis/error_pressure_std_2021.csv')
 
-x_t = np.loadtxt('../Abbildungen/data_analysis/error_temperature_x.csv')
-mean_t = np.loadtxt('../Abbildungen/data_analysis/error_temperature_mean.csv')
-std_t = np.loadtxt('../Abbildungen/data_analysis/error_temperature_std.csv')
+x_t = np.loadtxt('../Abbildungen/data_analysis/error_temperature_x_2021.csv')
+mean_t = np.loadtxt('../Abbildungen/data_analysis/error_temperature_mean_2021.csv')
+std_t = np.loadtxt('../Abbildungen/data_analysis/error_temperature_std_2021.csv')
 
-x_h = np.loadtxt('../Abbildungen/data_analysis/error_humidity_x.csv')
-mean_h = np.loadtxt('../Abbildungen/data_analysis/error_humidity_mean.csv')
-std_h = np.loadtxt('../Abbildungen/data_analysis/error_humidity_std.csv')
+x_h = np.loadtxt('../Abbildungen/data_analysis/error_humidity_x_2021.csv')
+mean_h = np.loadtxt('../Abbildungen/data_analysis/error_humidity_mean_2021.csv')
+std_h = np.loadtxt('../Abbildungen/data_analysis/error_humidity_std_2021.csv')
 
-x_c = np.loadtxt('../Abbildungen/data_analysis/error_sqrt_cape_x.csv')
-mean_c = np.loadtxt('../Abbildungen/data_analysis/error_sqrt_cape_mean.csv')
-std_c = np.loadtxt('../Abbildungen/data_analysis/error_sqrt_cape_std.csv')
+x_c = np.loadtxt('../Abbildungen/data_analysis/error_sqrt_cape_x_2021.csv')
+mean_c = np.loadtxt('../Abbildungen/data_analysis/error_sqrt_cape_mean_2021.csv')
+std_c = np.loadtxt('../Abbildungen/data_analysis/error_sqrt_cape_std_2021.csv')
 
 fig, axs = plt.subplots(2, 2, layout="constrained", sharey=True)
 ax = axs[0,0]
@@ -105,17 +121,17 @@ plt.savefig('../Abbildungen/error_over_NWP.pgf', bbox_inches='tight')
 
 
 """Error mean and variance over time"""
-x_month = np.loadtxt('../Abbildungen/data_analysis/error_month_x.csv')
-mean_month = np.loadtxt('../Abbildungen/data_analysis/error_month_mean.csv')
-std_month = np.loadtxt('../Abbildungen/data_analysis/error_month_std.csv')
+x_month = np.loadtxt('../Abbildungen/data_analysis/error_month_x_2021.csv')
+mean_month = np.loadtxt('../Abbildungen/data_analysis/error_month_mean_2021.csv')
+std_month = np.loadtxt('../Abbildungen/data_analysis/error_month_std_2021.csv')
 
-x_hour = np.loadtxt('../Abbildungen/data_analysis/error_hour_x.csv')
-mean_hour = np.loadtxt('../Abbildungen/data_analysis/error_hour_mean.csv')
-std_hour = np.loadtxt('../Abbildungen/data_analysis/error_hour_std.csv')
+x_hour = np.loadtxt('../Abbildungen/data_analysis/error_hour_x_2021.csv')
+mean_hour = np.loadtxt('../Abbildungen/data_analysis/error_hour_mean_2021.csv')
+std_hour = np.loadtxt('../Abbildungen/data_analysis/error_hour_std_2021.csv')
 
-x_step = np.loadtxt('../Abbildungen/data_analysis/error_steps_x.csv')
-mean_step = np.loadtxt('../Abbildungen/data_analysis/error_steps_mean.csv')
-std_step = np.loadtxt('../Abbildungen/data_analysis/error_steps_std.csv')
+x_step = np.loadtxt('../Abbildungen/data_analysis/error_steps_x_2021.csv')
+mean_step = np.loadtxt('../Abbildungen/data_analysis/error_steps_mean_2021.csv')
+std_step = np.loadtxt('../Abbildungen/data_analysis/error_steps_std_2021.csv')
 
 fig, axs = plt.subplots(1, 3, layout="constrained", sharey=True)
 ax = axs[0]
@@ -144,7 +160,137 @@ fig.set_size_inches(12*cm, 4*cm)
 # plt.show()
 plt.savefig('../Abbildungen/error_over_time.pgf', bbox_inches='tight')
 
+"""Error mean and variance over prediction, 2022"""
+x_wind_speed = np.loadtxt('../Abbildungen/data_analysis/error_wind_speed_x_22.csv')
+mean_wind_speed = np.loadtxt('../Abbildungen/data_analysis/error_wind_speed_mean_22.csv')
+std_wind_speed = np.loadtxt('../Abbildungen/data_analysis/error_wind_speed_std_22.csv')
 
+x_wind_gust = np.loadtxt('../Abbildungen/data_analysis/error_gust_x_22.csv')
+mean_wind_gust = np.loadtxt('../Abbildungen/data_analysis/error_gust_mean_22.csv')
+std_wind_gust = np.loadtxt('../Abbildungen/data_analysis/error_gust_std_22.csv')
+
+x_wind_gust_diff = np.loadtxt('../Abbildungen/data_analysis/error_gust_diff_x_22.csv')
+mean_wind_gust_diff = np.loadtxt('../Abbildungen/data_analysis/error_gust_diff_mean_22.csv')
+std_wind_gust_diff = np.loadtxt('../Abbildungen/data_analysis/error_gust_diff_std_22.csv')
+
+fig, axs = plt.subplots(1, 3, layout="constrained", sharey=True)
+ax = axs[0]
+ax.plot(x_wind_speed, mean_wind_speed, label='Mean')
+ax.plot(x_wind_speed, std_wind_speed, label='Standard deviation')
+ax.set_xlabel('Mean wind speed (m/s)')
+ax.set_ylabel('Prediction error (m/s)')
+ax.grid()
+ax = axs[1]
+ax.plot(x_wind_gust, mean_wind_gust, label='Mean')
+ax.plot(x_wind_gust, std_wind_gust, label='Standard deviation')
+ax.set_xlabel('Gust wind speed (m/s)')
+# ax.set_ylabel('Prediction error (m/s)')
+ax.grid()
+ax = axs[2]
+ax.plot(x_wind_gust_diff, mean_wind_gust_diff, label='Mean')
+ax.plot(x_wind_gust_diff, std_wind_gust_diff, label='Standard deviation')
+ax.set_xlabel('Difference of gust\nand mean wind speed')
+# ax.set_ylabel('Prediction error (m/s)')
+ax.grid()
+handles, labels = ax.get_legend_handles_labels()
+fig.legend(handles, labels, loc='upper center', ncol=2, bbox_to_anchor=(.5,1.17))
+fig.set_size_inches(12*cm, 5*cm)
+# plt.tight_layout()
+# plt.subplots_adjust(top=0.7)
+# plt.show()
+plt.savefig('../Abbildungen/error_over_wind_speed_22.pgf', bbox_inches='tight')
+
+# Other NWP values
+x_p = np.loadtxt('../Abbildungen/data_analysis/error_pressure_x_22.csv')
+mean_p = np.loadtxt('../Abbildungen/data_analysis/error_pressure_mean_22.csv')
+std_p = np.loadtxt('../Abbildungen/data_analysis/error_pressure_std_22.csv')
+
+x_t = np.loadtxt('../Abbildungen/data_analysis/error_temperature_x_22.csv')
+mean_t = np.loadtxt('../Abbildungen/data_analysis/error_temperature_mean_22.csv')
+std_t = np.loadtxt('../Abbildungen/data_analysis/error_temperature_std_22.csv')
+
+x_h = np.loadtxt('../Abbildungen/data_analysis/error_humidity_x_22.csv')
+mean_h = np.loadtxt('../Abbildungen/data_analysis/error_humidity_mean_22.csv')
+std_h = np.loadtxt('../Abbildungen/data_analysis/error_humidity_std_22.csv')
+
+x_c = np.loadtxt('../Abbildungen/data_analysis/error_sqrt_cape_x_22.csv')
+mean_c = np.loadtxt('../Abbildungen/data_analysis/error_sqrt_cape_mean_22.csv')
+std_c = np.loadtxt('../Abbildungen/data_analysis/error_sqrt_cape_std_22.csv')
+
+fig, axs = plt.subplots(2, 2, layout="constrained", sharey=True)
+ax = axs[0,0]
+ax.plot(x_p/100, mean_p, label='Mean')
+ax.plot(x_p/100, std_p, label='Standard deviation')
+ax.set_xlabel('Predicted air pressure (hPa)')
+ax.set_ylabel('Prediction error (m/s)')
+ax.grid()
+ax = axs[0,1]
+ax.plot(x_t, mean_t, label='Mean')
+ax.plot(x_t, std_t, label='Standard deviation')
+ax.set_xlabel('Predicted temperature (K)')
+# ax.set_ylabel('Prediction error (m/s)')
+ax.grid()
+ax = axs[1,0]
+ax.plot(100*x_h, mean_h, label='Mean')
+ax.plot(100*x_h, std_h, label='Standard deviation')
+ax.set_xlabel('Predicted relative humidity (\%)')
+ax.set_ylabel('Prediction error (m/s)')
+ax.grid()
+ax = axs[1,1]
+ax.plot(x_c, mean_c, label='Mean')
+ax.plot(x_c, std_c, label='Standard deviation')
+ax.set_xlabel(r'Predicted $\sqrt{\mathrm{CAPE}}$ ($\sqrt{\mathrm{J/kg}}$)')
+# ax.set_ylabel('Prediction error (m/s)')
+ax.grid()
+handles, labels = ax.get_legend_handles_labels()
+fig.legend(handles, labels, loc='upper center', ncol=2, bbox_to_anchor=(.5,1.1))
+fig.set_size_inches(12*cm, 8*cm)
+# plt.tight_layout()
+# plt.subplots_adjust(top=0.7)
+# plt.show()
+plt.savefig('../Abbildungen/error_over_NWP_22.pgf', bbox_inches='tight')
+
+
+
+"""Error mean and variance over time"""
+x_month = np.loadtxt('../Abbildungen/data_analysis/error_month_x_22.csv')
+mean_month = np.loadtxt('../Abbildungen/data_analysis/error_month_mean_22.csv')
+std_month = np.loadtxt('../Abbildungen/data_analysis/error_month_std_22.csv')
+
+x_hour = np.loadtxt('../Abbildungen/data_analysis/error_hour_x_22.csv')
+mean_hour = np.loadtxt('../Abbildungen/data_analysis/error_hour_mean_22.csv')
+std_hour = np.loadtxt('../Abbildungen/data_analysis/error_hour_std_22.csv')
+
+x_step = np.loadtxt('../Abbildungen/data_analysis/error_steps_x_22.csv')
+mean_step = np.loadtxt('../Abbildungen/data_analysis/error_steps_mean_22.csv')
+std_step = np.loadtxt('../Abbildungen/data_analysis/error_steps_std_22.csv')
+
+fig, axs = plt.subplots(1, 3, layout="constrained", sharey=True)
+ax = axs[0]
+ax.plot(x_month, mean_month, label='Mean')
+ax.plot(x_month, std_month, label='Standard deviation')
+ax.set_xlabel('Month')
+ax.set_ylabel('Prediction error (m/s)')
+ax.grid()
+ax = axs[1]
+ax.plot(x_hour, mean_hour, label='Mean')
+ax.plot(x_hour, std_hour, label='Standard deviation')
+ax.set_xlabel('Hour')
+#ax.set_ylabel('Prediction error (m/s)')
+ax.grid()
+ax = axs[2]
+ax.plot(x_step, mean_step, label='Mean')
+ax.plot(x_step, std_step, label='Standard deviation')
+ax.set_xlabel('Hours since release of NWP')
+#ax.set_ylabel('Prediction error (m/s)')
+ax.grid()
+handles, labels = ax.get_legend_handles_labels()
+fig.legend(handles, labels, loc='upper center', ncol=2, bbox_to_anchor=(.5,1.2))
+fig.set_size_inches(12*cm, 4*cm)
+# plt.tight_layout()
+# plt.subplots_adjust(top=0.7)
+# plt.show()
+plt.savefig('../Abbildungen/error_over_time_22.pgf', bbox_inches='tight')
 """Error covariance over time"""
 cov_time = np.loadtxt('../Abbildungen/data_analysis/cov_over_steps.csv')
 x_time = np.arange(len(cov_time))/6
@@ -267,6 +413,26 @@ axs[1].hist(errors_in_range, bins=bins, density=True, histtype='step')
 axs[1].set_xlabel('Prediction error')
 axs[0].hist(measurements_in_range, bins=bins, density=True, histtype='step')
 axs[0].set_xlabel('Measured wind speed')
+
+wind_predicted_range = (15,16)
+indices_in_range = [i for i, v in enumerate(predictions) 
+                    if v > wind_predicted_range[0] and v <= wind_predicted_range[1]]
+errors_in_range = errors[indices_in_range]
+measurements_in_range = measurements[indices_in_range]
+mean_error = np.mean(errors_in_range)
+std_error = np.std(errors_in_range)
+norm_2_error = norm(mean_error, std_error)
+mean_meas = np.mean(measurements_in_range)
+std_meas = np.std(measurements_in_range)
+norm_2_meas = norm(mean_meas, std_meas)
+
+
+axs[1].hist(errors_in_range, bins=bins, density=True, histtype='step')
+axs[1].set_xlabel('Prediction error')
+axs[0].hist(measurements_in_range, bins=bins, density=True, histtype='step')
+axs[0].set_xlabel('Measured wind speed')
+labels.append(fr'''${wind_predicted_range[0]}\,\mathrm{"{"}m/s{"}"}\leq v_\mathrm{"{"}wind,MF{"}"}\leq {wind_predicted_range[1]}\,\mathrm{"{"}m/s{"}"}$''')
+
 axs[0].grid()
 axs[1].grid()
 axs[1].set_xlim(-6,6)
@@ -334,23 +500,11 @@ opt = get_gp_opt(n_z=100, max_epochs_second_training=20, epochs_timeseries_retra
                     epochs_timeseries_first_train=500)
 weather_data = load_weather_data(opt['t_start'], opt['t_end'])
 
-try:
-    trajectory_measured = np.loadtxt('modules/gp/scoring/trajectory_meas.csv')
-except:
-    trajectory_measured = get_trajectory_measured(weather_data, opt)
-    np.savetxt('modules/gp/scoring/trajectory_meas.csv', trajectory_measured)
-try:
-    trajectory_nwp = np.loadtxt('modules/gp/scoring/trajectory_nwp.csv')
-except:
-    trajectory_nwp = get_trajectory_nwp(weather_data, opt)
-    np.savetxt('modules/gp/scoring/trajectory_nwp.csv', trajectory_nwp)
-try:
-    trajectory_gp_prior = np.loadtxt('modules/gp/scoring/trajectory_gp_prior_heteroscedastic_100.csv')
-    var_gp_prior = np.loadtxt('modules/gp/scoring/var_gp_prior_heteroscedastic_100.csv')
-except:
-    trajectory_gp_prior, var_gp_prior = get_trajectory_gp_prior(weather_data, opt)
-    np.savetxt('modules/gp/scoring/trajectory_gp_prior.csv', trajectory_gp_prior)
-    np.savetxt('modules/gp/scoring/var_gp_prior.csv', var_gp_prior)
+trajectory_measured = np.loadtxt('modules/gp/scoring/trajectory_meas.csv')
+trajectory_nwp = np.loadtxt('modules/gp/scoring/trajectory_nwp.csv')
+trajectory_gp_prior = np.loadtxt('modules/gp/scoring/trajectory_gp_prior_heteroscedastic_100_without_time2.csv')
+var_gp_prior = np.loadtxt('modules/gp/scoring/var_gp_prior_heteroscedastic_100_without_time2.csv')
+
 rmse_nwp = get_rmse(trajectory_measured, trajectory_nwp)
 mae_nwp = get_mae(trajectory_measured, trajectory_nwp)
 
@@ -389,25 +543,12 @@ fig.set_size_inches(15*cm, 7*cm)
 plt.savefig('../Abbildungen/nwp_gp_scoring.pgf', bbox_inches='tight')
 
 # Homoscedastic vs heteroscedastic
-try:
-    trajectory_measured = np.loadtxt('modules/gp/scoring/trajectory_meas.csv')
-except:
-    trajectory_measured = get_trajectory_measured(weather_data, opt)
-    np.savetxt('modules/gp/scoring/trajectory_meas.csv', trajectory_measured)
-try:
-    trajectory_nwp = np.loadtxt('modules/gp/scoring/trajectory_nwp.csv')
-except:
-    trajectory_nwp = get_trajectory_nwp(weather_data, opt)
-    np.savetxt('modules/gp/scoring/trajectory_nwp.csv', trajectory_nwp)
-try:
-    trajectory_gp_prior = np.loadtxt('modules/gp/scoring/trajectory_gp_prior_heteroscedastic_100.csv')
-    var_gp_prior = np.loadtxt('modules/gp/scoring/var_gp_prior_heteroscedastic_100.csv')
-    trajectory_gp_prior_homoscedastic = np.loadtxt('modules/gp/scoring/trajectory_gp_prior_homoscedastic_100.csv')
-    var_gp_prior_homoscedastic = np.loadtxt('modules/gp/scoring/var_gp_prior_homoscedastic_100.csv')
-except:
-    trajectory_gp_prior, var_gp_prior = get_trajectory_gp_prior(weather_data, opt)
-    np.savetxt('modules/gp/scoring/trajectory_gp_prior.csv', trajectory_gp_prior)
-    np.savetxt('modules/gp/scoring/var_gp_prior.csv', var_gp_prior)
+trajectory_measured = np.loadtxt('modules/gp/scoring/trajectory_meas.csv')
+trajectory_nwp = np.loadtxt('modules/gp/scoring/trajectory_nwp.csv')
+trajectory_gp_prior = np.loadtxt('modules/gp/scoring/trajectory_gp_prior_heteroscedastic_100_without_time2.csv')
+var_gp_prior = np.loadtxt('modules/gp/scoring/var_gp_prior_heteroscedastic_100_without_time2.csv')
+trajectory_gp_prior_homoscedastic = np.loadtxt('modules/gp/scoring/trajectory_gp_prior_homoscedastic_100_without_time2.csv')
+var_gp_prior_homoscedastic = np.loadtxt('modules/gp/scoring/var_gp_prior_homoscedastic_100_without_time2.csv')
 rmse_nwp = get_rmse(trajectory_measured, trajectory_nwp)
 mae_nwp = get_mae(trajectory_measured, trajectory_nwp)
 
@@ -596,7 +737,7 @@ rmse_list_homoscedastic = []
 mae_list_homoscedastic = []
 re_list_homoscedastic = []
 score_list_homoscedastic = []
-for n_z in (10,25,50,100,200,400):
+for n_z in (5,10,25,50,100,200):
     opt = get_gp_opt(n_z=n_z, max_epochs_second_training=20, epochs_timeseries_retrain=500, 
                         epochs_timeseries_first_train=500, n_last=36)
     weather_data = load_weather_data(opt['t_start'], opt['t_end'])
@@ -612,19 +753,19 @@ for n_z in (10,25,50,100,200,400):
         trajectory_nwp = get_trajectory_nwp(weather_data, opt)
         np.savetxt('modules/gp/scoring/trajectory_nwp.csv', trajectory_nwp)
     try:
-        trajectory_gp_prior = np.loadtxt(f'modules/gp/scoring/trajectory_gp_prior_heteroscedastic_{n_z}.csv')
-        var_gp_prior = np.loadtxt(f'modules/gp/scoring/var_gp_prior_heteroscedastic_{n_z}.csv')
+        trajectory_gp_prior = np.loadtxt(f'modules/gp/scoring/trajectory_gp_prior_heteroscedastic_{n_z}_without_time2.csv')
+        var_gp_prior = np.loadtxt(f'modules/gp/scoring/var_gp_prior_heteroscedastic_{n_z}_without_time2.csv')
     except:
         trajectory_gp_prior, var_gp_prior = get_trajectory_gp_prior(opt)
-        np.savetxt(f'modules/gp/scoring/trajectory_gp_prior_heteroscedastic_{n_z}.csv', trajectory_gp_prior)
-        np.savetxt(f'modules/gp/scoring/var_gp_prior_heteroscedastic_{n_z}.csv', var_gp_prior)
+        np.savetxt(f'modules/gp/scoring/trajectory_gp_prior_heteroscedastic_{n_z}_without_time2.csv', trajectory_gp_prior)
+        np.savetxt(f'modules/gp/scoring/var_gp_prior_heteroscedastic_{n_z}_without_time2.csv', var_gp_prior)
     try:
-        trajectory_gp_prior_homoscedastic = np.loadtxt(f'modules/gp/scoring/trajectory_gp_prior_homoscedastic_{n_z}.csv')
-        var_gp_prior_homoscedastic = np.loadtxt(f'modules/gp/scoring/var_gp_prior_homoscedastic_{n_z}.csv')
+        trajectory_gp_prior_homoscedastic = np.loadtxt(f'modules/gp/scoring/trajectory_gp_prior_homoscedastic_{n_z}_without_time2.csv')
+        var_gp_prior_homoscedastic = np.loadtxt(f'modules/gp/scoring/var_gp_prior_homoscedastic_{n_z}_without_time2.csv')
     except:
         trajectory_gp_prior_homoscedastic, var_gp_prior_homoscedastic = get_trajectory_gp_prior_homoscedastic(opt)
-        np.savetxt(f'modules/gp/scoring/trajectory_gp_prior_homoscedastic_{n_z}.csv', trajectory_gp_prior_homoscedastic)
-        np.savetxt(f'modules/gp/scoring/var_gp_prior_homoscedastic_{n_z}.csv', var_gp_prior_homoscedastic)
+        np.savetxt(f'modules/gp/scoring/trajectory_gp_prior_homoscedastic_{n_z}_without_time2.csv', trajectory_gp_prior_homoscedastic)
+        np.savetxt(f'modules/gp/scoring/var_gp_prior_homoscedastic_{n_z}_without_time2.csv', var_gp_prior_homoscedastic)
     rmse_nwp = get_rmse(trajectory_measured, trajectory_nwp)
     mae_nwp = get_mae(trajectory_measured, trajectory_nwp)
 
@@ -676,15 +817,17 @@ for i, color in enumerate(['tab:blue', 'tab:orange', 'tab:green', 'tab:red', 'ta
     # axs[1].plot(alpha_vec, score_list_homoscedastic[i], '--', color=color)
     # axs[1].set_xlabel('alpha')
     # axs[1].set_ylabel('Interval score')
-fig.legend(handles=handles, labels=['$n_z$=10', '25', '50', '100', '200', '400'], loc='upper center', 
+fig.legend(handles=handles, labels=['$n_z$=5', '10', '25', '50', '100', '200'], loc='upper center', 
            ncol=6, bbox_to_anchor=(.5,1.15))
+axs[0].grid()
+axs[1].grid()
 fig.set_size_inches(12*cm, 7*cm)
 plt.savefig('../Abbildungen/prior_gp_nz.pgf', bbox_inches='tight')
 fig, axs = plt.subplots(1,2, layout='constrained')
-axs[0].plot([10,25,50,100,200,400], rmse_list_heteroscedastic, marker='x')
-axs[0].plot([10,25,50,100,200,400], rmse_list_homoscedastic, marker='o')
-axs[1].plot([10,25,50,100,200,400], mae_list_heteroscedastic, marker='x')
-axs[1].plot([10,25,50,100,200,400], mae_list_homoscedastic, marker='o')
+axs[0].plot([5,10,25,50,100,200], rmse_list_heteroscedastic, marker='x')
+axs[0].plot([5,10,25,50,100,200], rmse_list_homoscedastic, marker='o')
+axs[1].plot([5,10,25,50,100,200], mae_list_heteroscedastic, marker='x')
+axs[1].plot([5,10,25,50,100,200], mae_list_homoscedastic, marker='o')
 #axs[].xaxis.set_major_locator(mticker.FixedLocator([10,25,50,100,200,400]))
 #axs[0].xaxis.set_major_locator(mticker.FixedLocator([10,25,50,100,200,400]))
 axs[0].grid()

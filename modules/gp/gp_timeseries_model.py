@@ -127,10 +127,10 @@ class TimeseriesModel(WindPredictionGP):
         # kernels_nwp_var = gpf.kernels.SquaredExponential(
         #     lengthscales=[1]*(n_inputs-1), active_dims=[i for i in range(n_inputs-1)])
         kernels_nwp_mean = gpf.kernels.Sum([
-            gpf.kernels.RationalQuadratic(lengthscales=[1], active_dims=[i]) for i in range(n_inputs-1)
+            gpf.kernels.RationalQuadratic(lengthscales=[1], active_dims=[i]) for i in range(n_inputs-2)
         ])
         kernels_nwp_var = gpf.kernels.Sum([
-            gpf.kernels.RationalQuadratic(lengthscales=[1], active_dims=[i]) for i in range(n_inputs-1)
+            gpf.kernels.RationalQuadratic(lengthscales=[1], active_dims=[i]) for i in range(n_inputs-2)
         ])
 
 

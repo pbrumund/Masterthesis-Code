@@ -22,7 +22,7 @@ if __name__ == '__main__':
     re_list_homoscedastic = []
     score_list_homoscedastic = []
     for n_z in (5,10,25,50,100,200):#,200,400):
-        opt = get_gp_opt(n_z=n_z, max_epochs_second_training=20, epochs_timeseries_retrain=500, 
+        opt = get_gp_opt(n_z=n_z, max_epochs_second_training=50, epochs_timeseries_retrain=500, 
                             epochs_timeseries_first_train=500, n_last=36)
         weather_data = load_weather_data(opt['t_start'], opt['t_end'])
 
@@ -42,7 +42,7 @@ if __name__ == '__main__':
         except:
             trajectory_gp_prior, var_gp_prior = get_trajectory_gp_prior(opt)
             np.savetxt(f'modules/gp/scoring/trajectory_gp_prior_heteroscedastic_{n_z}_without_time2.csv', trajectory_gp_prior)
-            np.savetxt(f'modules/gp/scoring/var_gp_prior_heteroscedastic_{n_z}_without_time2', var_gp_prior)
+            np.savetxt(f'modules/gp/scoring/var_gp_prior_heteroscedastic_{n_z}_without_time2.csv', var_gp_prior)
         try:
             trajectory_gp_prior_homoscedastic = np.loadtxt(f'modules/gp/scoring/trajectory_gp_prior_homoscedastic_{n_z}_without_time2.csv')
             var_gp_prior_homoscedastic = np.loadtxt(f'modules/gp/scoring/var_gp_prior_homoscedastic_{n_z}_without_time2.csv')
@@ -101,15 +101,15 @@ if __name__ == '__main__':
         axs[1].plot(alpha_vec, score_list_homoscedastic[i], '--', color=color)
         axs[1].set_xlabel('alpha')
         axs[1].set_ylabel('Interval score')
-    fig.legend(handles=handles, labels=['5', '10', '25', '50', '100', '200', '400'])
+    fig.legend(handles=handles, labels=['5', '10', '25', '50', '100', '200'])
 
     fig, axs = plt.subplots(1,3)
-    axs[0].plot([10,25,50,100,200,400], rmse_list_heteroscedastic,'x')
-    axs[0].plot([10,25,50,100,200,400], rmse_list_homoscedastic,'o')
-    axs[1].plot([10,25,50,100,200,400], mae_list_heteroscedastic,'x')
-    axs[1].plot([10,25,50,100,200,400], mae_list_homoscedastic,'o')
-    axs[2].plot([10,25,50,100,200,400], nlpd_list_heteroscedastic,'x')
-    axs[2].plot([10,25,50,100,200,400], nlpd_list_homoscedastic,'o')
+    axs[0].plot([5,10,25,50,100,200], rmse_list_heteroscedastic,'x')
+    axs[0].plot([5,10,25,50,100,200], rmse_list_homoscedastic,'o')
+    axs[1].plot([5,10,25,50,100,200], mae_list_heteroscedastic,'x')
+    axs[1].plot([5,10,25,50,100,200], mae_list_homoscedastic,'o')
+    axs[2].plot([5,10,25,50,100,200], nlpd_list_heteroscedastic,'x')
+    axs[2].plot([5,10,25,50,100,200], nlpd_list_homoscedastic,'o')
     #axs[].xaxis.set_major_locator(mticker.FixedLocator([10,25,50,100,200,400]))
     #axs[0].xaxis.set_major_locator(mticker.FixedLocator([10,25,50,100,200,400]))
     axs[0].grid()
@@ -157,8 +157,7 @@ if __name__ == '__main__':
     trajectories_mean_post_simple, trajectories_var_post_simple = get_simple_timeseries_traj(opt)
     trajectories_mean_post, trajectories_var_post = get_posterior_trajectories(opt)
     trajectories_mean_post_homoscedastic, trajectories_var_post_homoscedastic = get_posterior_trajectories_homoscedastic(opt)
-    # trajectories_mean_post = np.loadtxt('gp/scoring/trajectories_mean_post.csv')
-    # trajectories_var_post = np.loadtxt('gp/scoring/trajectories_var_post.csv')
+    
     # first dimension: time of prediction, second dimension: number of steps forward
     n_points = len(trajectory_measured)
     alpha = 0.1

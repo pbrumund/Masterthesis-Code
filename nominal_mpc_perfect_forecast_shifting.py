@@ -15,7 +15,11 @@ plot = True
 ohps = OHPS(N_p=8000)
 
 mpc_opt = get_mpc_opt(N=30)
+<<<<<<< HEAD
 t_start = datetime.datetime(2022,12,10)
+=======
+t_start = datetime.datetime(2022,1,1)
+>>>>>>> dddcbdd04f2693c10697ade4f75c3531877528a3
 t_end = datetime.datetime(2022,12,31)
 mpc_opt['t_start_sim'] = t_start
 mpc_opt['t_end_sim'] = t_end
@@ -28,7 +32,10 @@ mpc_opt['t_end_sim'] = t_end
 # mpc_opt['param']['r_s_E'] = 10000
 # mpc_opt['param']['R_input'] = ca.diag([0,1e-8])
 mpc_opt['param']['k_dP'] = 10
+<<<<<<< HEAD
 mpc_opt['param']['k_gtg_dP'] = 0
+=======
+>>>>>>> dddcbdd04f2693c10697ade4f75c3531877528a3
 mpc_opt['param']['r_s_E'] = 100
 mpc_opt['param']['k_bat'] = 0
 mpc_opt['use_path_constraints_energy'] = True

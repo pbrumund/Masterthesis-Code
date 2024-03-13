@@ -8,10 +8,10 @@ with open(fp) as f:
     client_id = f.readline().rstrip('\n')
 print(client_id)
 
-start_time = datetime.datetime(2020,1,1)
-end_time = datetime.datetime(2020,1,31)
+start_time = datetime.datetime(2012,1,1)
+end_time = datetime.datetime(2021,12,31)
 
-filename_save = start_time.strftime("%Y%m%d") + "-" + end_time.strftime("%Y%m%d") + "_observations1.csv"
+filename_save = start_time.strftime("%Y%m%d") + "-" + end_time.strftime("%Y%m%d") + "_observations.csv"
 
 end_time = end_time + datetime.timedelta(days=1)
 

@@ -541,8 +541,8 @@ if __name__ == "__main__":
     plt.show() """
 
     #Plot error variance over CIN
-    """ start_time = datetime.datetime(2020,1,1)
-    end_time = datetime.datetime(2020,1,31)
+    start_time = datetime.datetime(2020,1,1)
+    end_time = datetime.datetime(2022,12,31)
     weather_data = fi.load_weather_data(start_time, end_time)
 
     n_points = len(weather_data['times_meas'])
@@ -557,7 +557,7 @@ if __name__ == "__main__":
         measurements[i] = ut.get_wind_value(weather_data, t, 0)
         predictions[i] = ut.get_NWP(weather_data, t, 0, 'wind_speed_10m')
         errors[i] = measurements[i] - predictions[i]
-        cin_pred[i] = ut.get_NWP(weather_data, t, 0, "atmosphere_convective_inhibition")
+        cin_pred[i] = ut.get_NWP(weather_data, t, 0, "air_temperature_2m")
     
     cin_sorted = np.sort(cin_pred)
     errors_sorted = errors[np.argsort(cin_pred)]
@@ -583,11 +583,11 @@ if __name__ == "__main__":
     plt.plot(cin_range_mean, mean_errors_in_range)
     plt.xlabel('CIN')
     plt.ylabel('Error Variance')
-    plt.show()"""
+    plt.show()
 
     # plot error over air pressure
 
-    start_time = datetime.datetime(2020,1,1)
+    """ start_time = datetime.datetime(2020,1,1)
     end_time = datetime.datetime(2022,12,31)
     weather_data = fi.load_weather_data(start_time, end_time)
 
@@ -607,6 +607,7 @@ if __name__ == "__main__":
         errors[i] = measurements[i] - predictions[i]
         p_pred[i] = ut.get_NWP(weather_data, t, 0, "air_pressure_at_sea_level")
     
+    c_corr = np.mean(measurements)/np.mean(predictions)
     p_sorted = np.sort(p_pred)
     errors_sorted = errors[np.argsort(p_pred)]
 
@@ -632,7 +633,9 @@ if __name__ == "__main__":
     plt.legend(['mean error', 'standard deviation'])
     plt.xlabel('air pressure')
     plt.ylabel('prediction error')
-
+    np.savetxt('../Abbildungen/data_analysis/error_gust_diff_x_2021.csv', p_range_mean)
+    np.savetxt('../Abbildungen/data_analysis/error_gust_diff_mean_2021.csv', mean_errors_in_range)
+    np.savetxt('../Abbildungen/data_analysis/error_gust_diff_std_2021.csv', np.sqrt(var_errors_in_range))
     # 2022
     indices = [i for i, t in enumerate(weather_data['times_meas']) if t.year==2022]
     n_points = len(indices)
@@ -647,7 +650,7 @@ if __name__ == "__main__":
         measurements[i] = ut.get_wind_value(weather_data, t, 0)
         predictions[i] = ut.get_NWP(weather_data, t, 0, 'wind_speed_10m')
         errors[i] = measurements[i] - predictions[i]
-        p_pred[i] = ut.get_NWP(weather_data, t, 0, "air_pressure_at_sea_level")
+        p_pred[i] = ut.get_NWP(weather_data, t, 0, "wind_speed_of_gust_diff")
     
     p_sorted = np.sort(p_pred)
     errors_sorted = errors[np.argsort(p_pred)]
@@ -662,7 +665,9 @@ if __name__ == "__main__":
         p_range_mean[i] = np.mean(p_sorted[index_1:index_2])
         var_errors_in_range[i] = np.var(errors_sorted[index_1:index_2])
         mean_errors_in_range[i] = np.mean(errors_sorted[index_1:index_2])
-
+    np.savetxt('../Abbildungen/data_analysis/error_gust_diff_x_22.csv', p_range_mean)
+    np.savetxt('../Abbildungen/data_analysis/error_gust_diff_mean_22.csv', mean_errors_in_range)
+    np.savetxt('../Abbildungen/data_analysis/error_gust_diff_std_22.csv', np.sqrt(var_errors_in_range))
 
     plt.figure()
     plt.scatter(p_pred, errors)
@@ -674,7 +679,7 @@ if __name__ == "__main__":
     plt.legend(['mean error', 'standard deviation'])
     plt.xlabel('air pressure')
     plt.ylabel('prediction error')
-    plt.show()
+    plt.show() """
 
     # plot error over temperature
     """ start_time = datetime.datetime(2020,1,1)
@@ -775,8 +780,8 @@ if __name__ == "__main__":
     weather_data = fi.load_weather_data(start_time, end_time)
 
     n_points = len(weather_data['times_meas'])
-    n_select = n_points
-    selected_points = random.sample(range(n_points), n_select)
+    selected_points = [i for i in range(n_points) if weather_data['times_meas'][i].year<2022]
+    n_select = len(selected_points)
 
     measurements = np.zeros(n_select)
     predictions = np.zeros(n_select)
@@ -788,9 +793,9 @@ if __name__ == "__main__":
         measurements[i] = dh.get_measurement(t, 0)
         predictions[i] = dh.get_NWP(t, 0, 'wind_speed_10m')
         errors[i] = measurements[i] - predictions[i]
-        t_vec[i] = t.hour
+        t_vec[i] = t.month
     
-    bins = 24
+    bins = 12
     var_errors_in_range = np.zeros(bins)
     mean_errors_in_range = np.zeros(bins)
     for i in range(bins):
@@ -809,41 +814,76 @@ if __name__ == "__main__":
     plt.xlabel('Wind speed')
     plt.ylabel('Prediction error')
     plt.show()
-    np.savetxt('../Abbildungen/data_analysis/error_hour_mean.csv', mean_errors_in_range)
-    np.savetxt('../Abbildungen/data_analysis/error_hour_std.csv', np.sqrt(var_errors_in_range))
-    np.savetxt('../Abbildungen/data_analysis/error_hour_x.csv', np.array(range(bins))) """
+    np.savetxt('../Abbildungen/data_analysis/error_month_mean_2021.csv', mean_errors_in_range)
+    np.savetxt('../Abbildungen/data_analysis/error_month_std_2021.csv', np.sqrt(var_errors_in_range))
+    np.savetxt('../Abbildungen/data_analysis/error_month_x_2021.csv', np.array(range(bins))) """
     
     # Plot error over time since prediction
     """ start_time = datetime.datetime(2020,1,1)
-    end_time = datetime.datetime(2022,12,31)
+    end_time = datetime.datetime(2022,12,30)
 
     n_hours = 15
     n_steps = n_hours*6
     n_values = len(dh.weather_data['times1_sh'])//6
 
-    # dates = [start_time+datetime.timedelta(days=i) for i in range(n_values//4)]
-    # times = [t + i*datetime.timedelta(hours=6) for t in dates for i in range(4)]
-    # times1 = [start_time+i*datetime.timedelta(hours=6) for i in range(n_values)]
+    dates = [start_time+datetime.timedelta(days=i) for i in range(n_values//4-1)]
+    times = [t + i*datetime.timedelta(hours=6) for t in dates for i in range(4)]
+    times1 = [start_time+i*datetime.timedelta(hours=6) for i in range(n_values)]
+    times_2021 = [t for t in times if t.year<2022]
+    n_values = len(times_2021)
 
-    # measurements = np.zeros((n_steps, n_values))
-    # predictions = np.zeros((n_steps, n_values))
-    # errors = np.zeros((n_steps, n_values))
-    # dt_mat = np.zeros((n_steps, n_values))
+    measurements = np.zeros((n_steps, n_values))
+    predictions = np.zeros((n_steps, n_values))
+    errors = np.zeros((n_steps, n_values))
+    dt_mat = np.zeros((n_steps, n_values))
 
-    # for i, t in enumerate(times):
+    # for i, t in enumerate(times_2021):
     #     for k in range(n_steps):
     #         measurements[k,i] = dh.get_measurement(t, k)
     #         predictions[k,i] = dh.get_NWP(t, k)
     #         errors[k,i] = measurements[k,i] - predictions[k,i]
     #         dt_mat[k,i] = dh.get_time_since_forecast(t, k)
-    errors = np.loadtxt('../Abbildungen/data_analysis/error_steps.csv')
+    # # errors = np.loadtxt('../Abbildungen/data_analysis/error_steps.csv')
+    # means = np.zeros(n_steps)
+    # vars = np.zeros(n_steps)
+    # hours = np.zeros(n_steps)
+    # for k in range(n_steps):
+    #     means[k] = np.mean(errors[k,:])
+    #     vars[k] = np.var(errors[k,:])
+
+    # plt.figure()
+    # plt.plot(np.arange(15,step=1/6), means)
+    # plt.plot(np.arange(15,step=1/6), np.sqrt(vars))
+    # plt.legend(['mean error', 'standard deviation'])
+    # plt.xlabel('Wind speed')
+    # plt.ylabel('Prediction error')
+    # np.savetxt('../Abbildungen/data_analysis/error_steps_x_2021.csv', np.arange(15,step=1/6))
+    # np.savetxt('../Abbildungen/data_analysis/error_steps_mean_2021.csv', means)
+    # np.savetxt('../Abbildungen/data_analysis/error_steps_std_2021.csv', np.sqrt(vars))
+    times_22 = [t for t in times if t.year==2022]
+    n_values = len(times_22)
+
+    measurements = np.zeros((n_steps, n_values))
+    predictions = np.zeros((n_steps, n_values))
+    errors = np.zeros((n_steps, n_values))
+    dt_mat = np.zeros((n_steps, n_values))
+
+    for i, t in enumerate(times_22):
+        for k in range(n_steps):
+            measurements[k,i] = dh.get_measurement(t, k)
+            predictions[k,i] = dh.get_NWP(t, k)
+            errors[k,i] = measurements[k,i] - predictions[k,i]
+            dt_mat[k,i] = dh.get_time_since_forecast(t, k)
+    # errors = np.loadtxt('../Abbildungen/data_analysis/error_steps.csv')
     means = np.zeros(n_steps)
     vars = np.zeros(n_steps)
     hours = np.zeros(n_steps)
     for k in range(n_steps):
         means[k] = np.mean(errors[k,:])
         vars[k] = np.var(errors[k,:])
-
+    np.savetxt('../Abbildungen/data_analysis/error_steps_x_22.csv', np.arange(15,step=1/6))
+    np.savetxt('../Abbildungen/data_analysis/error_steps_mean_22.csv', means)
+    np.savetxt('../Abbildungen/data_analysis/error_steps_std_22.csv', np.sqrt(vars))
     plt.figure()
     plt.plot(np.arange(15,step=1/6), means)
     plt.plot(np.arange(15,step=1/6), np.sqrt(vars))
