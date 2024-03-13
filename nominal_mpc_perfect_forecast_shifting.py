@@ -15,7 +15,7 @@ plot = True
 ohps = OHPS(N_p=8000)
 
 mpc_opt = get_mpc_opt(N=30)
-t_start = datetime.datetime(2022,8,1)
+t_start = datetime.datetime(2022,1,1)
 t_end = datetime.datetime(2022,12,31)
 mpc_opt['t_start_sim'] = t_start
 mpc_opt['t_end_sim'] = t_end

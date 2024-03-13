@@ -53,7 +53,6 @@ if plot:
 
 # save trajectories to file
 dims = {'Power output': 4, 'Power demand': 1, 'SOC': 1, 'Inputs': 2}
-mpc_opt['llc_penalize_i'] = True
 data_saver = DataSaving('nominal_mpc_nwp_forecast', mpc_opt, gp_opt, dims)
 
 # load trajectories if possible

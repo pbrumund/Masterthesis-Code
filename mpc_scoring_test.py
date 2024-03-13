@@ -17,6 +17,7 @@ print(f'Mean power demand of GTG: {P_in_gtg}, average efficiency: {eta_gtg}')
 
 # Nominal MPC, NWP forecast
 mpc_opt = get_mpc_opt(N=30)
+mpc_opt['llc_penalize_i'] = True
 gp_opt = get_gp_opt(dt_pred = mpc_opt['dt'])
 
 error_abs_nwpf, error_rel_nwpf = get_power_error('nominal_mpc_nwp_forecast', mpc_opt, gp_opt)
@@ -27,6 +28,7 @@ print(f'GTG power: {P_gtg_abs}, {P_gtg_rel*100}% of total generated power')
 print(f'Mean power demand of GTG: {P_in_gtg}, average efficiency: {eta_gtg}')
 
 # Nominal MPC, GP forecast
+mpc_opt = get_mpc_opt(N=30)
 gp_opt = get_gp_opt(dt_pred = mpc_opt['dt'], steps_forward = mpc_opt['N'], verbose=False)
 
 error_abs_gpf, error_rel_gpf = get_power_error('nominal_mpc_gp_forecast', mpc_opt, gp_opt)

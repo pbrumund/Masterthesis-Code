@@ -12,6 +12,7 @@ from modules.plotting import TimeseriesPlot
 from modules.mpc_scoring import DataSaving
 
 plot = True
+plot_predictions = False
 plt.ion()
 ohps = OHPS(N_p=8000)
 
@@ -19,7 +20,7 @@ epsilon = 0.1
 std_factor = norm.ppf(1-epsilon)
 std_list = (-std_factor, 0, std_factor)
 
-mpc_opt = get_mpc_opt(N=30, std_list_multistage=std_list, use_simple_scenarios=True, dE_min=5000, t_start_sim=datetime.datetime(2022,8,1))#,  t_start=datetime.datetime(2022,12,6), t_end=datetime.datetime(2022,12,8))
+mpc_opt = get_mpc_opt(N=30, std_list_multistage=std_list, use_simple_scenarios=True, dE_min=5000, t_start_sim=datetime.datetime(2022,1,1))#,  t_start=datetime.datetime(2022,12,6), t_end=datetime.datetime(2022,12,8))
 mpc_opt['param']['k_dP'] = 50
 mpc_opt['param']['k_gtg_dP'] = 25
 mpc_opt['param']['r_s_E'] = 100
@@ -67,10 +68,9 @@ if plot:
     plt_SOC = TimeseriesPlot('Time', 'Battery SOC', title='Multi-stage MPC, Battery SOC')
     plt_inputs = TimeseriesPlot('Time', 'Control input', ['Gas turbine power', 'Battery current'],
                                 title = 'Multi-stage MPC, control inputs')
-    plt_wind_pred = TimeseriesPlot('Time', 'Wind speed (m/s)', title='Multi-stage MPC, wind speed scenarios')
-    plt_wind_P_pred = TimeseriesPlot('Time', 'Power (kW)', title='Multi-stage MPC, wind power scenarios')
-    fig_pred, ax_pred = plt.subplots(2, sharex=True, num='Multi-stage MPC, wind predictions')
-    fig_E_tot, ax_E_tot = plt.subplots(2, sharex=True, num='Multi-stage MPC, total Energy output')
+    if plot_predictions:
+        fig_pred, ax_pred = plt.subplots(2, sharex=True, num='Multi-stage MPC, wind predictions')
+        fig_E_tot, ax_E_tot = plt.subplots(2, sharex=True, num='Multi-stage MPC, total Energy output')
 # save trajectories to file
 dims = {'Power output': 4, 'Power demand': 1, 'SOC': 1, 'Inputs': 2}
 data_saver = DataSaving('multi-stage_mpc_shifting', mpc_opt, gp_opt, dims)
@@ -164,48 +164,49 @@ for k, t in enumerate(times, start=start):
         means_P = [np.array([ohps.get_P_wtg(0,0,w) for w in multistage_mpc.means[-1]]).reshape(-1)]
         parents_i = multistage_mpc.parent_nodes[-1]
         # plot scenarios
-        for i in range(2, multistage_mpc.horizon+1):
-            means_parents = np.array(multistage_mpc.means[-(i)])[parents_i]
-            mean_wind_power = np.array([ohps.get_P_wtg(0,0,w) for w in means_parents]).reshape(-1)
-            parents_i = np.array(multistage_mpc.parent_nodes[-(i)])[parents_i]
-            means.append(means_parents)
-            means_P.append(mean_wind_power)
-        means.reverse()
-        means_P.reverse()
-        means = np.array(means)
-        means_P = np.array(means_P)
-        times_plot_power = [t+i*datetime.timedelta(minutes=mpc_opt['dt']) for i in range(multistage_mpc.horizon)]
-        ax_pred[0].clear()
-        ax_pred[1].clear()
-        plt_sc = ax_pred[0].plot(times_plot_power, means, color='tab:blue', label='Scenarios')[0]
-        ax_pred[1].plot(times_plot_power, means_P, color='tab:blue', label='Scenarios')
-        meas = np.array([data_handler.get_measurement(t, i) for i in range(multistage_mpc.horizon)])
-        P_meas = np.array([ohps.get_P_wtg(0,0,w) for w in meas]).reshape(-1)
-        gp_mean, gp_var = gp.predict_trajectory(t, multistage_mpc.horizon)
-        P_mean = np.array([ohps.get_P_wtg(0,0,w) for w in gp_mean]).reshape(-1)
-        P_lower = np.array([ohps.get_P_wtg(0,0,w-std_factor*np.sqrt(v)) for w, v in zip(gp_mean, gp_var)]).reshape(-1)
-        P_upper = np.array([ohps.get_P_wtg(0,0,w+std_factor*np.sqrt(v)) for w, v in zip(gp_mean, gp_var)]).reshape(-1)
-        plt_meas, = ax_pred[0].plot(times_plot_power, meas, color='tab:green', label='Measurement')
-        ax_pred[1].plot(times_plot_power, P_meas, color='tab:green', label='Measurement')
-        plt_gp, = ax_pred[0].plot(times_plot_power, gp_mean, color='tab:orange', label='GP mean and confidence interval')
-        ax_pred[1].plot(times_plot_power, P_mean, color='tab:orange', label='GP mean and confidence interval')
-        ax_pred[0].fill_between(times_plot_power, gp_mean-std_factor*np.sqrt(gp_var), 
-            gp_mean+std_factor*np.sqrt(gp_var), color='tab:orange', alpha=0.4)
-        ax_pred[1].fill_between(times_plot_power, P_lower, P_upper, color='tab:orange', alpha=0.4)
-        plt_nwp, = ax_pred[0].plot(times_plot_power, np.array(wind_speeds_nwp).reshape(-1), color='tab:red', label='NWP')
-        ax_pred[1].plot(times_plot_power, np.array(wind_power_nwp), color='tab:red', label='NWP')
-        ax_pred[0].set_ylabel('Wind speed (m/s)')
-        ax_pred[1].set_ylabel('Wind power (kW)')
-        ax_E_tot[0].clear()
-        ax_E_tot[1].clear()
-        E_target_lt = np.append(E_target_lt, scheduler.get_E_target_lt(t)/1000)
-        ax_E_tot[0].plot(times_plot[:k+1], ca.cumsum(P_traj[:k+1,-2]/6000))
-        ax_E_tot[0].plot(times_plot[:k+1], E_target_lt.reshape(-1), '--', color='black')
-        ax_E_tot[0].set_xlabel('Time')
-        ax_E_tot[0].set_ylabel('Generated energy (MWh)')
-        ax_E_tot[1].plot(times_plot[:k+1], ca.cumsum(P_traj[:k+1,-2]/6000)-ca.cumsum(P_traj[:k+1,-1]/6000))
-        ax_E_tot[0].set_xlabel('Time')
-        ax_E_tot[1].set_ylabel('Shifted Energy demand (MWh)')
+        if plot_predictions:
+            for i in range(2, multistage_mpc.horizon+1):
+                means_parents = np.array(multistage_mpc.means[-(i)])[parents_i]
+                mean_wind_power = np.array([ohps.get_P_wtg(0,0,w) for w in means_parents]).reshape(-1)
+                parents_i = np.array(multistage_mpc.parent_nodes[-(i)])[parents_i]
+                means.append(means_parents)
+                means_P.append(mean_wind_power)
+            means.reverse()
+            means_P.reverse()
+            means = np.array(means)
+            means_P = np.array(means_P)
+            times_plot_power = [t+i*datetime.timedelta(minutes=mpc_opt['dt']) for i in range(multistage_mpc.horizon)]
+            ax_pred[0].clear()
+            ax_pred[1].clear()
+            plt_sc = ax_pred[0].plot(times_plot_power, means, color='tab:blue', label='Scenarios')[0]
+            ax_pred[1].plot(times_plot_power, means_P, color='tab:blue', label='Scenarios')
+            meas = np.array([data_handler.get_measurement(t, i) for i in range(multistage_mpc.horizon)])
+            P_meas = np.array([ohps.get_P_wtg(0,0,w) for w in meas]).reshape(-1)
+            gp_mean, gp_var = gp.predict_trajectory(t, multistage_mpc.horizon)
+            P_mean = np.array([ohps.get_P_wtg(0,0,w) for w in gp_mean]).reshape(-1)
+            P_lower = np.array([ohps.get_P_wtg(0,0,w-std_factor*np.sqrt(v)) for w, v in zip(gp_mean, gp_var)]).reshape(-1)
+            P_upper = np.array([ohps.get_P_wtg(0,0,w+std_factor*np.sqrt(v)) for w, v in zip(gp_mean, gp_var)]).reshape(-1)
+            plt_meas, = ax_pred[0].plot(times_plot_power, meas, color='tab:green', label='Measurement')
+            ax_pred[1].plot(times_plot_power, P_meas, color='tab:green', label='Measurement')
+            plt_gp, = ax_pred[0].plot(times_plot_power, gp_mean, color='tab:orange', label='GP mean and confidence interval')
+            ax_pred[1].plot(times_plot_power, P_mean, color='tab:orange', label='GP mean and confidence interval')
+            ax_pred[0].fill_between(times_plot_power, gp_mean-std_factor*np.sqrt(gp_var), 
+                gp_mean+std_factor*np.sqrt(gp_var), color='tab:orange', alpha=0.4)
+            ax_pred[1].fill_between(times_plot_power, P_lower, P_upper, color='tab:orange', alpha=0.4)
+            plt_nwp, = ax_pred[0].plot(times_plot_power, np.array(wind_speeds_nwp).reshape(-1), color='tab:red', label='NWP')
+            ax_pred[1].plot(times_plot_power, np.array(wind_power_nwp), color='tab:red', label='NWP')
+            ax_pred[0].set_ylabel('Wind speed (m/s)')
+            ax_pred[1].set_ylabel('Wind power (kW)')
+            ax_E_tot[0].clear()
+            ax_E_tot[1].clear()
+            E_target_lt = np.append(E_target_lt, scheduler.get_E_target_lt(t)/1000)
+            ax_E_tot[0].plot(times_plot[:k+1], ca.cumsum(P_traj[:k+1,-2]/6000))
+            ax_E_tot[0].plot(times_plot[:k+1], E_target_lt.reshape(-1), '--', color='black')
+            ax_E_tot[0].set_xlabel('Time')
+            ax_E_tot[0].set_ylabel('Generated energy (MWh)')
+            ax_E_tot[1].plot(times_plot[:k+1], ca.cumsum(P_traj[:k+1,-2]/6000)-ca.cumsum(P_traj[:k+1,-1]/6000))
+            ax_E_tot[0].set_xlabel('Time')
+            ax_E_tot[1].set_ylabel('Shifted Energy demand (MWh)')
     # Print out current SOC and power outputs
     print(f'time: {t.strftime("%d.%m.%Y %H:%M")}: Battery SOC: {SOC_traj[k]}')
     print(f'Gas turbine power output: {P_gtg}, Battery power output: {P_bat}, '

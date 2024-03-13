@@ -20,7 +20,7 @@ epsilon = 0.1
 std_factor = norm.ppf(1-epsilon)
 std_list = (-std_factor, 0, std_factor)
 
-mpc_opt = get_mpc_opt(N=30, std_list_multistage=std_list, use_simple_scenarios=True, dE_min=5000)#,  t_start=datetime.datetime(2022,12,6), t_end=datetime.datetime(2022,12,8))
+mpc_opt = get_mpc_opt(N=30, std_list_multistage=std_list, use_simple_scenarios=True, dE_min=0)#,  t_start=datetime.datetime(2022,12,6), t_end=datetime.datetime(2022,12,8))
 gp_opt = get_gp_opt(dt_pred = mpc_opt['dt'], steps_forward = mpc_opt['N'], verbose=False)
 gp = TimeseriesModel(gp_opt)
 ohps.setup_integrator(dt=60*mpc_opt['dt'])
