@@ -17,11 +17,7 @@ plot = True
 
 ohps = OHPS(N_p=8000)
 
-<<<<<<< HEAD
-mpc_opt = get_mpc_opt(N=30, t_start_sim=datetime.datetime(2022,12,10))
-=======
 mpc_opt = get_mpc_opt(N=30, t_start_sim=datetime.datetime(2022,1,1))
->>>>>>> dddcbdd04f2693c10697ade4f75c3531877528a3
 t_start = datetime.datetime(2022,8,1)
 mpc_opt['param']['k_dP'] = 10
 mpc_opt['param']['r_s_E'] = 100
