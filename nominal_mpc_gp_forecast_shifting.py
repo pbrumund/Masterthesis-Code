@@ -18,9 +18,9 @@ ohps = OHPS(N_p=N_p)
 plot = False
 
 mpc_opt = get_mpc_opt(N=30, t_start_sim=datetime.datetime(2022,1,1))
-mpc_opt['param']['k_dP'] = 50
-mpc_opt['param']['k_gtg_dP'] = 25
+mpc_opt['param']['k_dP'] = 10
 mpc_opt['param']['r_s_E'] = 100
+mpc_opt['param']['k_bat'] = 0
 mpc_opt['use_path_constraints_energy'] = True
 mpc_opt['N_p'] = N_p
 nominal_mpc = NominalMPCLoadShifting(ohps, mpc_opt)

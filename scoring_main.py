@@ -37,19 +37,19 @@ if __name__ == '__main__':
             trajectory_nwp = get_trajectory_nwp(weather_data, opt)
             np.savetxt('modules/gp/scoring/trajectory_nwp.csv', trajectory_nwp)
         try:
-            trajectory_gp_prior = np.loadtxt(f'modules/gp/scoring/trajectory_gp_prior_heteroscedastic_{n_z}_only_nwp.csv')
-            var_gp_prior = np.loadtxt(f'modules/gp/scoring/var_gp_prior_heteroscedastic_{n_z}_only_nwp.csv')
+            trajectory_gp_prior = np.loadtxt(f'modules/gp/scoring/trajectory_gp_prior_heteroscedastic_{n_z}_without_time2.csv')
+            var_gp_prior = np.loadtxt(f'modules/gp/scoring/var_gp_prior_heteroscedastic_{n_z}_without_time2.csv')
         except:
             trajectory_gp_prior, var_gp_prior = get_trajectory_gp_prior(opt)
-            np.savetxt(f'modules/gp/scoring/trajectory_gp_prior_heteroscedastic_{n_z}_only_nwp.csv', trajectory_gp_prior)
-            np.savetxt(f'modules/gp/scoring/var_gp_prior_heteroscedastic_{n_z}_only_nwp.csv', var_gp_prior)
+            np.savetxt(f'modules/gp/scoring/trajectory_gp_prior_heteroscedastic_{n_z}_without_time2.csv', trajectory_gp_prior)
+            np.savetxt(f'modules/gp/scoring/var_gp_prior_heteroscedastic_{n_z}_without_time2.csv', var_gp_prior)
         try:
-            trajectory_gp_prior_homoscedastic = np.loadtxt(f'modules/gp/scoring/trajectory_gp_prior_homoscedastic_{n_z}_only_nwp.csv')
-            var_gp_prior_homoscedastic = np.loadtxt(f'modules/gp/scoring/var_gp_prior_homoscedastic_{n_z}_only_nwp.csv')
+            trajectory_gp_prior_homoscedastic = np.loadtxt(f'modules/gp/scoring/trajectory_gp_prior_homoscedastic_{n_z}_without_time2.csv')
+            var_gp_prior_homoscedastic = np.loadtxt(f'modules/gp/scoring/var_gp_prior_homoscedastic_{n_z}_without_time2.csv')
         except:
             trajectory_gp_prior_homoscedastic, var_gp_prior_homoscedastic = get_trajectory_gp_prior_homoscedastic(opt)
-            np.savetxt(f'modules/gp/scoring/trajectory_gp_prior_homoscedastic_{n_z}_only_nwp.csv', trajectory_gp_prior_homoscedastic)
-            np.savetxt(f'modules/gp/scoring/var_gp_prior_homoscedastic_{n_z}_only_nwp.csv', var_gp_prior_homoscedastic)
+            np.savetxt(f'modules/gp/scoring/trajectory_gp_prior_homoscedastic_{n_z}_without_time2.csv', trajectory_gp_prior_homoscedastic)
+            np.savetxt(f'modules/gp/scoring/var_gp_prior_homoscedastic_{n_z}_without_time2.csv', var_gp_prior_homoscedastic)
         rmse_nwp = get_rmse(trajectory_measured, trajectory_nwp)
         mae_nwp = get_mae(trajectory_measured, trajectory_nwp)
 
