@@ -104,7 +104,7 @@ class TimeseriesModel(WindPredictionGP):
         see https://gpflow.github.io/GPflow/develop/notebooks/advanced/heteroskedastic.html
         """
         # TODO: Get a simpler model (homoscedastic or simple time series) for comparison
-        self.filename_gp = f'modules/gp/models/gp_prior_{self.opt["n_z"]}'
+        self.filename_gp = f'modules/gp/models/gp_prior_{self.opt["n_z"]}_without_time2'
         try:
             gp_prior = tf.saved_model.load(self.filename_gp)
             if self.opt['verbose']:
@@ -127,10 +127,10 @@ class TimeseriesModel(WindPredictionGP):
         # kernels_nwp_var = gpf.kernels.SquaredExponential(
         #     lengthscales=[1]*(n_inputs-1), active_dims=[i for i in range(n_inputs-1)])
         kernels_nwp_mean = gpf.kernels.Sum([
-            gpf.kernels.RationalQuadratic(lengthscales=[1], active_dims=[i]) for i in range(n_inputs-2)
+            gpf.kernels.RationalQuadratic(lengthscales=[1], active_dims=[i]) for i in range(n_inputs-1)
         ])
         kernels_nwp_var = gpf.kernels.Sum([
-            gpf.kernels.RationalQuadratic(lengthscales=[1], active_dims=[i]) for i in range(n_inputs-2)
+            gpf.kernels.RationalQuadratic(lengthscales=[1], active_dims=[i]) for i in range(n_inputs-1)
         ])
 
 
