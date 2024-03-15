@@ -13,7 +13,7 @@ from modules.plotting import TimeseriesPlot
 from modules.mpc_scoring import DataSaving
 from modules.mpc import LowLevelController
 
-plot = True
+plot = False
 plot_predictions = False
 ohps = OHPS()
 
@@ -189,5 +189,5 @@ for k, t in enumerate(times, start=start):
     v_last = v_opt
     P_gtg_last = P_gtg
     P_demand_last = P_demand
-    plt.pause(0.5)
+    if plot: plt.pause(0.5)
 pass

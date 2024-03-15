@@ -119,6 +119,12 @@ if __name__ == '__main__':
     axs[1].set_xlabel('Number of inducing points')
     axs[1].set_ylabel('MAE (m/s)')
     fig.legend(['Heteroscedastic', 'Homoscedastic'])
+    re_gp_prior = re_list_heteroscedastic[-2]
+    re_gp_prior_homoscedastic = re_list_homoscedastic[-2]
+    int_score_gp_prior = score_list_heteroscedastic[-2]
+    int_score_gp_prior_homoscedastic = score_list_homoscedastic[-2]
+    percent_in_interval_gp_prior = np.array(re_gp_prior) + (1-alpha_vec) 
+    percent_in_interval_gp_prior_homoscedastic = np.array(re_gp_prior_homoscedastic) + (1-alpha_vec)
     plt.figure()
     plt.plot(np.linspace(0.01,1,100), re_gp_prior, label='Heteroscedastic GP')
     plt.plot(alpha_vec, re_gp_prior_homoscedastic, label='Homoscedastic GP')

@@ -103,7 +103,7 @@ class DayAheadScheduler:
         self.g_ub = ca.vertcat(g_eq_ub, g_ineq_P_ub, g_ineq_E_ub)
 
         # Cost function
-        self.J = ca.sum1(P_in_gtg) + 0*ca.sumsqr(eta_gtg-self.ohps.gtg.eta_fun(1)) + 100*s_E + 0.001*ca.sumsqr(I_bat) - SOC_fin + 0.0001*ca.sumsqr((P_out[1:]-P_out[:-1]))
+        self.J = ca.sum1(P_in_gtg) + 0*ca.sumsqr(eta_gtg-self.ohps.gtg.eta_fun(1)) + 100*s_E + 0.001*ca.sumsqr(I_bat) - SOC_fin #+ #0.0001*ca.sumsqr((P_out[1:]-P_out[:-1]))
 
         # NLP
         self.nlp = {

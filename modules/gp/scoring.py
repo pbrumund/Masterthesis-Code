@@ -122,8 +122,8 @@ def get_trajectory_gp_prior_homoscedastic(opt):
 
 def get_posterior_trajectories(opt):
     try:
-        trajectories_mean = np.loadtxt(f'modules/gp/scoring/trajectories_mean_post_{opt["n_last"]}_only_nwp.csv')
-        trajectories_var = np.loadtxt(f'modules/gp/scoring/trajectories_var_post_{opt["n_last"]}_only_nwp.csv')
+        trajectories_mean = np.loadtxt(f'modules/gp/scoring/trajectories_mean_post_{opt["n_last"]}.csv')
+        trajectories_var = np.loadtxt(f'modules/gp/scoring/trajectories_var_post_{opt["n_last"]}.csv')
         n_calculated = trajectories_var.shape[0]
         t_start = opt['t_start_score'] + n_calculated*datetime.timedelta(minutes=10)
         t_end = opt['t_end_score'] - opt['steps_forward']*datetime.timedelta(minutes=10)
@@ -152,9 +152,9 @@ def get_posterior_trajectories(opt):
             time, opt['steps_forward'], train, include_last_measurement=False)
         trajectories_mean[i,:] = trajectory_mean_gp
         trajectories_var[i,:] = trajectory_var_gp
-        with open(f'modules/gp/scoring/trajectories_mean_post_{opt["n_last"]}_only_nwp.csv', 'a') as file:
+        with open(f'modules/gp/scoring/trajectories_mean_post_{opt["n_last"]}.csv', 'a') as file:
             np.savetxt(file, trajectory_mean_gp.reshape((1,-1)))
-        with open(f'modules/gp/scoring/trajectories_var_post_{opt["n_last"]}_only_nwp.csv', 'a') as file:
+        with open(f'modules/gp/scoring/trajectories_var_post_{opt["n_last"]}.csv', 'a') as file:
             np.savetxt(file, trajectory_var_gp.reshape((1,-1)))    
     return trajectories_mean, trajectories_var
 

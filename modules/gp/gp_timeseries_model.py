@@ -85,7 +85,17 @@ class TimeseriesModel(WindPredictionGP):
         self.timeseries_gp_param = None
         self.gp_predictions = None
         self.t_last_train = None
+        # speed up MPC by using pre-calculated predictions
+        try:
+            self.predictions_mean = np.loadtxt(f'modules/gp/gp_predictions/trajectories_mean_timeseries.csv')
+            self.predictions_var = np.loadtxt(f'modules/gp/gp_predictions/trajectories_var_timeseries.csv')
+            prediction_times = np.loadtxt(f'modules/gp/gp_predictions/times_timeseries.csv')
+            self.prediction_times = [datetime.datetime.strptime(t[0]+t[1], '%Y-%m-%d%H:%M:%S') for t in prediction_times]
 
+        except:
+            self.predictions_mean = None
+            self.predictions_var = None
+            self.prediction_times = None
 
     def get_training_data_prior(self):
         opt = {}
@@ -417,6 +427,15 @@ class TimeseriesModel(WindPredictionGP):
         Set up the timeseries GP and train if required, then predict a number of steps ahead
         returns mean and variance as numpy arrays
         """
+        if self.predictions_mean is not None and pseudo_gp is None:
+            try:
+                i = self.prediction_times.index(start_time)
+                mean_traj = self.predictions_mean[i,:]
+                var_traj = self.predictions_var[i,:]
+                return mean_traj, var_traj
+            except:
+                pass
+
         if include_last_measurement:
             # include last measurement in prediction for exact first value by shifting time and indices
             start_time_gp = start_time+datetime.timedelta(minutes=self.opt['dt_meas'])
