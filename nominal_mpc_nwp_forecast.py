@@ -53,7 +53,7 @@ if plot:
 
 # save trajectories to file
 dims = {'Power output': 4, 'Power demand': 1, 'SOC': 1, 'Inputs': 2}
-data_saver = DataSaving('nominal_mpc_nwp_forecast', mpc_opt, gp_opt, dims)
+data_saver = DataSaving('nominal_mpc_nwp_forecast_without_llc', mpc_opt, gp_opt, dims)
 
 # load trajectories if possible
 start = 0
@@ -83,7 +83,7 @@ for k, t in enumerate(times, start=start):
              for w in wind_speeds_nwp]
     wind_speeds = ca.vertcat(*wind_speeds)
     wind_speeds_nwp = ca.vertcat(*wind_speeds_nwp)
-    # wind_speeds_nwp[0] = wind_speeds[0] # prefect measurement for first value
+    wind_speeds_nwp[0] = wind_speeds[0] # prefect measurement for first value
     if P_demand_last is not None:
         P_demand = ca.vertcat(P_demand_last[1:], P_wtg[-1] + 0.8*ohps.P_gtg_max)
     else:
@@ -101,9 +101,9 @@ for k, t in enumerate(times, start=start):
     s_P_opt = nominal_mpc.get_s_from_v_fun(v_opt)
     s_P_k = s_P_opt[0]
     # Simulate with low level controller adding uncertainty to battery
-    i_opt, P_gtg_opt, x_next = llc.simulate(t, x_k, u_k, s_P_k, P_demand[0])
-    u_k[0] = P_gtg_opt
-    u_k[1] = i_opt
+    # i_opt, P_gtg_opt, x_next = llc.simulate(t, x_k, u_k, s_P_k, P_demand[0])
+    # u_k[0] = P_gtg_opt
+    # u_k[1] = i_opt
 
     # save state, input, SOC and power trajectories
     x_traj[k,:] = x_k
@@ -140,5 +140,5 @@ for k, t in enumerate(times, start=start):
     P_gtg_last = P_gtg
     P_demand_last = P_demand
 
-    plt.pause(0.1)
+    # plt.pause(0.1)
 pass
