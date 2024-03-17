@@ -11,7 +11,7 @@ from modules.plotting import TimeseriesPlot
 from modules.mpc_scoring import DataSaving
 
 
-plot = True
+plot = False
 ohps = OHPS(N_p=8000)
 
 mpc_opt = get_mpc_opt(N=30)

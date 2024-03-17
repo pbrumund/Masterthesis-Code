@@ -85,7 +85,17 @@ class TimeseriesModel(WindPredictionGP):
         self.timeseries_gp_param = None
         self.gp_predictions = None
         self.t_last_train = None
+        # speed up MPC by using pre-calculated predictions
+        try:
+            self.predictions_mean = np.loadtxt(f'modules/gp/gp_predictions/trajectories_mean_timeseries.csv')
+            self.predictions_var = np.loadtxt(f'modules/gp/gp_predictions/trajectories_var_timeseries.csv')
+            prediction_times = np.loadtxt(f'modules/gp/gp_predictions/times_timeseries.csv')
+            self.prediction_times = [datetime.datetime.strptime(t[0]+t[1], '%Y-%m-%d%H:%M:%S') for t in prediction_times]
 
+        except:
+            self.predictions_mean = None
+            self.predictions_var = None
+            self.prediction_times = None
 
     def get_training_data_prior(self):
         opt = {}
@@ -104,7 +114,7 @@ class TimeseriesModel(WindPredictionGP):
         see https://gpflow.github.io/GPflow/develop/notebooks/advanced/heteroskedastic.html
         """
         # TODO: Get a simpler model (homoscedastic or simple time series) for comparison
-        self.filename_gp = f'modules/gp/models/gp_prior_{self.opt["n_z"]}'
+        self.filename_gp = f'modules/gp/models/gp_prior_{self.opt["n_z"]}_without_time2'
         try:
             gp_prior = tf.saved_model.load(self.filename_gp)
             if self.opt['verbose']:
@@ -127,10 +137,10 @@ class TimeseriesModel(WindPredictionGP):
         # kernels_nwp_var = gpf.kernels.SquaredExponential(
         #     lengthscales=[1]*(n_inputs-1), active_dims=[i for i in range(n_inputs-1)])
         kernels_nwp_mean = gpf.kernels.Sum([
-            gpf.kernels.RationalQuadratic(lengthscales=[1], active_dims=[i]) for i in range(n_inputs-2)
+            gpf.kernels.RationalQuadratic(lengthscales=[1], active_dims=[i]) for i in range(n_inputs-1)
         ])
         kernels_nwp_var = gpf.kernels.Sum([
-            gpf.kernels.RationalQuadratic(lengthscales=[1], active_dims=[i]) for i in range(n_inputs-2)
+            gpf.kernels.RationalQuadratic(lengthscales=[1], active_dims=[i]) for i in range(n_inputs-1)
         ])
 
 
@@ -417,6 +427,15 @@ class TimeseriesModel(WindPredictionGP):
         Set up the timeseries GP and train if required, then predict a number of steps ahead
         returns mean and variance as numpy arrays
         """
+        if self.predictions_mean is not None and pseudo_gp is None:
+            try:
+                i = self.prediction_times.index(start_time)
+                mean_traj = self.predictions_mean[i,:]
+                var_traj = self.predictions_var[i,:]
+                return mean_traj, var_traj
+            except:
+                pass
+
         if include_last_measurement:
             # include last measurement in prediction for exact first value by shifting time and indices
             start_time_gp = start_time+datetime.timedelta(minutes=self.opt['dt_meas'])

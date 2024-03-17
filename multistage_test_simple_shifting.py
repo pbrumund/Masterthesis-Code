@@ -11,7 +11,7 @@ from modules.mpc import MultistageMPCLoadShifting, DayAheadScheduler, LowLevelCo
 from modules.plotting import TimeseriesPlot
 from modules.mpc_scoring import DataSaving
 
-plot = True
+plot = False
 plot_predictions = False
 plot_predictions = False
 plt.ion()

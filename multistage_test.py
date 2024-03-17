@@ -11,7 +11,7 @@ from modules.mpc import MultistageMPC, LowLevelController, get_mpc_opt
 from modules.plotting import TimeseriesPlot
 from modules.mpc_scoring import DataSaving
 
-plot = True
+plot = False
 plot_predictions = False
 plt.ion()
 ohps = OHPS()

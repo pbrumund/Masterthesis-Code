@@ -32,7 +32,7 @@ class LowLevelController:
         P_wtg = ca.vertcat(*P_wtg)
         P_bat = ca.vertcat(*P_bat)
 
-        f = 1000*ca.sumsqr(P_demand - P_gtg - P_wtg - P_bat - s_P) + 0.1*ca.sumsqr(P_gtg-P_gtg_init) #+ 0.01*ca.sumsqr(i-i_init)
+        f = 100*ca.sumsqr(P_demand - P_gtg - P_wtg - P_bat - s_P) + 0.01*ca.sumsqr(P_gtg-P_gtg_init) #+ 0.01*ca.sumsqr(i-i_init)
         v = ca.vertcat(x, i, P_gtg)
         v_lb = ca.vertcat(self.ohps.battery.bounds['lbx']*ca.DM.ones(self.n_intervals+1),
                           self.ohps.battery.bounds['lbu']*ca.DM.ones(self.n_intervals),
@@ -68,7 +68,9 @@ class LowLevelController:
         }
 
         ipopt_opt = {
-        'print_level': 0
+        'print_level': 5,
+        'tol': 1e-10,
+        'compl_inf_tol': 1e-6
         }
         nlp_opt = {'ipopt': ipopt_opt}
         self._solver = ca.nlpsol('llc', 'ipopt', nlp, nlp_opt)
@@ -95,9 +97,10 @@ class LowLevelController:
         # v_opt, f_opt, g_opt = self.solver(i_init, p)
         P_bat = self.ohps.get_P_bat(x_k, v_opt[self.n_intervals+1],0)
         P_wtg = self.ohps.get_P_wtg(x_k, u_k, w)
-        if P_demand - P_gtg - P_wtg - P_bat - s_P_k < -10:
+        P_gtg_opt = v_opt[2*self.n_intervals+1:]
+        if P_demand - P_gtg_opt - P_wtg - P_bat - s_P_k < -10:
             print('Was ist hier los??????')
         x_opt = v_opt[:self.n_intervals+1]
         i_opt = v_opt[self.n_intervals+1:2*self.n_intervals+1]
-        P_gtg_opt = v_opt[2*self.n_intervals+1:]
+        
         return i_opt[0], P_gtg_opt[0], x_opt[-1]

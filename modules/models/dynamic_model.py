@@ -209,19 +209,26 @@ class DynamicModel():
         self.set_parameter_values(param_val)
 
     def setup_integrator(self, dt):
-        if self._w is not None:
-            ode = {'x': self._x, 
-                   'p': ca.vertcat(self._u, self._w), 
-                   'ode': self.odefun(self.state, self.inputs, self.parameter_values, self.disturbance)}
-        else:
-            ode = {'x': self._x, 
-                   'p': self._u, 
-                   'ode': self.odefun(self.state, self.inputs, self.parameter_values)}
-        self._integrator = ca.integrator('integrator', 'rk', ode, 0, dt)
+        self.dt = dt
+        x0 = ca.SX.sym('x0', self._nx)
+        u = ca.SX.sym('u', self._nu)
+        x_next = x0 + self.dt*self.odefun(x0, u, self.parameter_values)
+        self._integrator = ca.Function('integrator', [x0, u], [x_next])
+
+        # if self._w is not None:
+        #     ode = {'x': self._x, 
+        #            'p': ca.vertcat(self._u, self._w), 
+        #            'ode': self.odefun(self.state, self.inputs, self.parameter_values, self.disturbance)}
+        # else:
+        #     ode = {'x': self._x, 
+        #            'p': self._u, 
+        #            'ode': self.odefun(self.state, self.inputs, self.parameter_values)}
+        # self._integrator = ca.integrator('integrator', 'rk', ode, 0, dt)
 
     def get_next_state(self, x_i, u_i):
-        result = self._integrator(x0=x_i, p=u_i)
-        return result['xf']
+        return self._integrator(x_i, u_i)
+        # result = self._integrator(x0=x_i, p=u_i)
+        # return result['xf']
     
     def get_power_output(self, x, u, w):
         raise NotImplementedError('please provide a function to calculate the power output')

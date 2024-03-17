@@ -10,7 +10,7 @@ from modules.gp import DataHandler, get_gp_opt
 from modules.plotting import TimeseriesPlot
 from modules.mpc_scoring import DataSaving
 
-plot = True
+plot = False
 ohps = OHPS()
 
 mpc_opt = get_mpc_opt(N=30, use_soft_constraints_state=False)

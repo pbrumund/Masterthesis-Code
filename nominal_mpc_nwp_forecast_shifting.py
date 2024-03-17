@@ -13,7 +13,7 @@ from modules.plotting import TimeseriesPlot
 from modules.mpc_scoring import DataSaving
 from modules.mpc import LowLevelController
 
-plot = True
+plot = False
 
 ohps = OHPS(N_p=8000)
 
