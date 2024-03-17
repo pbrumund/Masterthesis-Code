@@ -64,7 +64,7 @@ def load_weather_data(start_time, end_time, filename=None):
     wind_speeds_forecast = np.array([])
     for key in predictions:
         if key in ["wind_speed_10m_sh", "wind_speed_10m_mh", "wind_speed_10m_lh"]:
-            wind_speeds_forecast = np.append(wind_speeds_forecast, predictions[key][:int(2/3*predictions[key].shape[0])])
+            wind_speeds_forecast = np.append(wind_speeds_forecast, predictions[key])
     # c_correction = np.mean(wind_speed_obs)/np.mean(wind_speeds_forecast)
     # for key in predictions:
     #     if key in ["wind_speed_10m_sh", "wind_speed_10m_mh", "wind_speed_10m_lh"]:
