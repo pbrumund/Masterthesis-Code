@@ -236,8 +236,8 @@ def get_simple_timeseries_traj(opt):
 
 def get_direct_model_trajectories(opt):
     try:
-        trajectories_mean = np.loadtxt('modules/gp/scoring/trajectories_mean_direct_only_nwp.csv')
-        trajectories_var = np.loadtxt('modules/gp/scoring/trajectories_var_direct_only_nwp.csv')
+        trajectories_mean = np.loadtxt('modules/gp/scoring/trajectories_mean_direct.csv')
+        trajectories_var = np.loadtxt('modules/gp/scoring/trajectories_var_direct.csv')
         n_calculated = trajectories_var.shape[0]
         t_start = opt['t_start_score'] + n_calculated*datetime.timedelta(minutes=10)
         t_end = opt['t_end_score'] - opt['steps_forward']*datetime.timedelta(minutes=10)
