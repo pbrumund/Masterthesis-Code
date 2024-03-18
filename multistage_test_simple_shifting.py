@@ -21,7 +21,7 @@ epsilon = 0.1
 std_factor = norm.ppf(1-epsilon)
 std_list = (-std_factor, 0, std_factor)
 
-mpc_opt = get_mpc_opt(N=30, std_list_multistage=std_list, use_simple_scenarios=True, dE_min=5000, t_start_sim=datetime.datetime(2022,1,1))#,  t_start=datetime.datetime(2022,12,6), t_end=datetime.datetime(2022,12,8))
+mpc_opt = get_mpc_opt(N=30, std_list_multistage=std_list, use_simple_scenarios=True, dE_min=5000, t_start_sim=datetime.datetime(2022,1,1), use_soft_constraints_state=False, include_last_measurement=True)#,  t_start=datetime.datetime(2022,12,6), t_end=datetime.datetime(2022,12,8))
 mpc_opt['param']['k_dP'] = 10
 mpc_opt['param']['r_s_E'] = 100
 mpc_opt['param']['k_bat'] = 0
@@ -74,7 +74,7 @@ if plot:
         fig_E_tot, ax_E_tot = plt.subplots(2, sharex=True, num='Multi-stage MPC, total Energy output')
 # save trajectories to file
 dims = {'Power output': 4, 'Power demand': 1, 'SOC': 1, 'Inputs': 2}
-data_saver = DataSaving('multi-stage_mpc_shifting', mpc_opt, gp_opt, dims)
+data_saver = DataSaving('multi-stage_mpc_shifting_without_llc', mpc_opt, gp_opt, dims)
 
 # load trajectories if possible
 start = 0
@@ -141,9 +141,9 @@ for k, t in enumerate(times, start=start):
     P_out = multistage_mpc.get_P_next_fun(v_opt)
     # s_P_k = multistage_mpc.get_s_P_next_fun(v_opt)
     # Simulate with low level controller adding uncertainty to battery
-    i_opt, P_gtg_opt, x_next = llc.simulate(t, x_k, u_k, 0, P_out)
-    u_k[0] = P_gtg_opt
-    u_k[1] = i_opt
+    # i_opt, P_gtg_opt, x_next = llc.simulate(t, x_k, u_k, 0, P_out)
+    # u_k[0] = P_gtg_opt
+    # u_k[1] = i_opt
 
     # save state, input, SOC and power trajectories
     x_traj[k,:] = x_k

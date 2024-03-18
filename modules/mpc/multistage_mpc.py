@@ -126,8 +126,8 @@ class MultistageMPC(MPC):
         std_list = self.opt['std_list_multistage'] # number of standard deviations for scenario generation
         norm_factor = sum(norm.pdf(x) for x in std_list) # to keep sum of probabilities at 1
         dE_min = self.opt['dE_min'] # minimum accumulated wind power difference between min and max trajectory for branching
-
-        mean_init, var_init = self.gp.predict_trajectory(start_time, self.horizon, train)
+        include_last_measurement = self.opt.get('include_last_measurement')
+        mean_init, var_init = self.gp.predict_trajectory(start_time, self.horizon, train, include_last_measurement=include_last_measurement)
 
         trajectory_means = [mean_init]
         trajectory_vars = [var_init]
@@ -223,11 +223,12 @@ class MultistageMPC(MPC):
     def generate_scenario_simple(self, start_time, train=False):
         """Only branch once using +-a standard deviations as scenarios,
         adapt certainty horizon based on accumulated power uncertainty"""
+        include_last_measurement = self.opt.get('include_last_measurement')
         std_list = self.opt['std_list_multistage'] # number of standard deviations for scenario generation
         norm_factor = sum(norm.pdf(x) for x in std_list) # to keep sum of probabilities at 1
         dE_min = self.opt['dE_min'] # minimum wind power difference at +-1 std for branching
 
-        mean_init, var_init = self.gp.predict_trajectory(start_time, self.horizon, train)
+        mean_init, var_init = self.gp.predict_trajectory(start_time, self.horizon, train, include_last_measurement=include_last_measurement)
 
         means_list = [[mean_init[0]]]
         vars_list = [[var_init[0]]] # is not used

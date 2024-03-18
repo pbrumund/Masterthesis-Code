@@ -226,8 +226,8 @@ class MultistageMPCLoadShifting(MPC):
         std_list = self.opt['std_list_multistage'] # number of standard deviations for scenario generation
         norm_factor = sum(norm.pdf(x) for x in std_list) # to keep sum of probabilities at 1
         dE_min = self.opt['dE_min'] # minimum wind power difference at +-1 std for branching
-
-        mean_init, var_init = self.gp.predict_trajectory(start_time, self.horizon, train)
+        include_last_measurement = self.opt.get('include_last_measurement')
+        mean_init, var_init = self.gp.predict_trajectory(start_time, self.horizon, train, include_last_measurement=include_last_measurement)
 
         means_list = [[mean_init[0]]]
         vars_list = [[var_init[0]]] # is not used
@@ -618,10 +618,11 @@ class TreeNode:
             self.J_s_E = 0
         if self.opt['use_soft_constraints_state']:
             self.J_s_x = self.opt['param']['r_s_x']*self.s_x
-        if self.opt['use_path_constraints_energy']:
-            self.J_s_E_path = self.opt['param']['r_s_E']*(self.s_E_path/200000)**2
         else:
             self.J_s_x = 0
+        if self.opt['use_path_constraints_energy']:
+            self.J_s_E_path = self.opt['param']['r_s_E']*(self.s_E_path/200000)**2
+        
         self.J = (self.J_gtg+self.J_bat+self.J_u+self.J_dP+self.J_s_E+self.J_s_x)*self.probability
         
         
