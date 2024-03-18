@@ -17,7 +17,7 @@ class DirectGP(WindPredictionGP):
         self.opt = opt
         self.steps_ahead = steps_ahead
         self.order = opt['direct_model_order']
-        self.filename_gp = f'modules/gp/models/direct_model_only_nwp/gp_direct_{self.steps_ahead}'
+        self.filename_gp = f'modules/gp/models/direct_model/gp_direct_{self.steps_ahead}'
         self.gp = self.load_gp_model()
         if self.gp is None:
             super().__init__(opt) # load data handler
@@ -269,6 +269,17 @@ class DirectGPEnsemble(WindPredictionGP):
         super().__init__(opt)
         self.get_models()
         self.model_lut = {}
+        try:
+            self.predictions_mean = np.loadtxt(f'modules/gp/gp_predictions/trajectories_mean_direct.csv')
+            self.predictions_var = np.loadtxt(f'modules/gp/gp_predictions/trajectories_var_direct.csv')
+            prediction_times = np.loadtxt(f'modules/gp/gp_predictions/times_direct.csv', dtype=object)
+            self.prediction_times = [datetime.datetime.strptime(t[0]+t[1], '%Y-%m-%d%H:%M:%S') for t in prediction_times]
+
+        except:
+            self.predictions_mean = None
+            self.predictions_var = None
+            self.prediction_times = None
+
 
     def get_models(self):
         self.models = {}
@@ -293,6 +304,21 @@ class DirectGPEnsemble(WindPredictionGP):
         #     dt = start_time.minute%self.opt['dt_meas']
         #     start_time = start_time.replace(
         #         minute=start_time.minute//self.opt['dt_meas']*self.opt['dt_meas'])
+        if self.predictions_mean is not None:
+            try:
+                if include_last_measurement: start_time_gp = start_time+datetime.timedelta(minutes=10)
+                else: start_time_gp = start_time
+                i = self.prediction_times.index(start_time_gp)
+                mean_traj = self.predictions_mean[i,:]
+                var_traj = self.predictions_var[i,:]
+                if include_last_measurement:
+                    mean_0 = self.data_handler.get_measurement(start_time)
+                    var_0 = 0
+                    mean_traj = np.concatenate([[mean_0], mean_traj[:-1]])
+                    var_traj = np.concatenate([[var_0], var_traj[:-1]])
+                return mean_traj[:steps], var_traj[:steps]
+            except:
+                pass
         scale = self.opt['dt_pred']/self.opt['dt_meas']
         mean_traj = np.zeros(steps)
         var_traj = np.zeros(steps)

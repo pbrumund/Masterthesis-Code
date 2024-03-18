@@ -427,20 +427,25 @@ class TimeseriesModel(WindPredictionGP):
         Set up the timeseries GP and train if required, then predict a number of steps ahead
         returns mean and variance as numpy arrays
         """
-        if self.predictions_mean is not None and pseudo_gp is None:
-            try:
-                i = self.prediction_times.index(start_time)
-                mean_traj = self.predictions_mean[i,:]
-                var_traj = self.predictions_var[i,:]
-                return mean_traj, var_traj
-            except:
-                pass
-
         if include_last_measurement:
             # include last measurement in prediction for exact first value by shifting time and indices
             start_time_gp = start_time+datetime.timedelta(minutes=self.opt['dt_meas'])
         else:
             start_time_gp = start_time
+        if self.predictions_mean is not None and pseudo_gp is None:
+            try:
+                i = self.prediction_times.index(start_time_gp)
+                mean_traj = self.predictions_mean[i,:]
+                var_traj = self.predictions_var[i,:]
+                if include_last_measurement:
+                    mean_0 = self.data_handler.generate_labels(start_time, steps_ahead=0)
+                    var_0 = 0
+                    mean_traj = np.concatenate([[mean_0], mean_traj[:-1]])
+                    var_traj = np.concatenate([[var_0], var_traj[:-1]])
+                return mean_traj[:steps], var_traj[:steps]
+            except:
+                pass
+
         # start_time_gp = start_time
         dt = 0  # if start time is not multiple of 10 min, difference to last previous multiple to shift indices#
         if start_time_gp.minute%self.opt['dt_meas'] != 0:
