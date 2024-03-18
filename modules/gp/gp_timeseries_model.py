@@ -89,7 +89,7 @@ class TimeseriesModel(WindPredictionGP):
         try:
             self.predictions_mean = np.loadtxt(f'modules/gp/gp_predictions/trajectories_mean_timeseries.csv')
             self.predictions_var = np.loadtxt(f'modules/gp/gp_predictions/trajectories_var_timeseries.csv')
-            prediction_times = np.loadtxt(f'modules/gp/gp_predictions/times_timeseries.csv')
+            prediction_times = np.loadtxt(f'modules/gp/gp_predictions/times_timeseries.csv', dtype=object)
             self.prediction_times = [datetime.datetime.strptime(t[0]+t[1], '%Y-%m-%d%H:%M:%S') for t in prediction_times]
 
         except:
@@ -438,7 +438,7 @@ class TimeseriesModel(WindPredictionGP):
                 mean_traj = self.predictions_mean[i,:]
                 var_traj = self.predictions_var[i,:]
                 if include_last_measurement:
-                    mean_0 = self.data_handler.generate_labels(start_time, steps_ahead=0)
+                    mean_0 = self.data_handler.get_measurement(start_time)
                     var_0 = 0
                     mean_traj = np.concatenate([[mean_0], mean_traj[:-1]])
                     var_traj = np.concatenate([[var_0], var_traj[:-1]])
