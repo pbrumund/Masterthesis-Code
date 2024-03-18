@@ -13,6 +13,7 @@ from modules.mpc_scoring import DataSaving
 
 plot = False
 plot_predictions = False
+plot_predictions = False
 plt.ion()
 ohps = OHPS(N_p=8000)
 

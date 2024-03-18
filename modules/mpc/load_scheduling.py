@@ -103,7 +103,7 @@ class DayAheadScheduler:
         self.g_ub = ca.vertcat(g_eq_ub, g_ineq_P_ub, g_ineq_E_ub)
 
         # Cost function
-        self.J = ca.sum1(P_in_gtg) + 0*ca.sumsqr(eta_gtg-self.ohps.gtg.eta_fun(1)) + 100*s_E + 0.001*ca.sumsqr(I_bat) - SOC_fin #+ #0.0001*ca.sumsqr((P_out[1:]-P_out[:-1]))
+        self.J = ca.sum1(P_in_gtg) + 0*ca.sumsqr(eta_gtg-self.ohps.gtg.eta_fun(1)) + 100*s_E + 0.001*ca.sumsqr(I_bat) - SOC_fin #+ 0.0001*ca.sumsqr((P_out[1:]-P_out[:-1]))
 
         # NLP
         self.nlp = {
@@ -117,6 +117,7 @@ class DayAheadScheduler:
         self.P_out_fun = ca.Function('get_P_sched', [self.v, self.p], [P_out])
         self.P_bat_fun = ca.Function('P_bat', [self.v], [P_bat])
         self.P_in_gtg_fun = ca.Function('P_in_gtg', [self.v], [P_in_gtg])
+        self.P_gtg_fun = ca.Function('P_gtg', [self.v], [P_gtg])
 
     def solve_problem(self, t, P_min, E_target, x0):
         times = [t + i*datetime.timedelta(hours=1) for i in range(self.steps)]
@@ -148,6 +149,8 @@ class DayAheadScheduler:
                 x0=v_init, p=p, lbx=self.v_lb, ubx=self.v_ub, lbg=self.g_lb, ubg=self.g_ub)
             
             v_opt = sol['x']
+            self.v_opt = v_opt
+            self.P_wtg_NWP = P_wtg_NWP
             self.P_sched = self.P_out_fun(v_opt, p)
             self.t_last_sched = t
             self.times_sched = [(t_i-t).total_seconds() for t_i in times]

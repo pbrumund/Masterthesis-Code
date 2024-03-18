@@ -16,10 +16,10 @@ lon = 2.27222
 start_time = datetime.datetime(2020,1,1)
 end_time = datetime.datetime(2022,12,31)
 # variables of interest
-variables_1 = ["wind_speed_10m", "wind_direction_10m", "air_pressure_at_sea_level", "air_temperature_2m"]   # MET post-processed
-variables_2 = ["specific_convective_available_potential_energy", "relative_humidity_2m", "cloud_base_altitude", "wind_speed_of_gust"]#, "atmosphere_convective_inhibition"]    # MEPS
+variables_1 = []   # MET post-processed
+variables_2 = ["x_wind_10m", "y_wind_10m"]#, "atmosphere_convective_inhibition"]    # MEPS
 
-filename_save = "gp\\" + start_time.strftime("%Y%m%d") + "-" + end_time.strftime("%Y%m%d") + "_forecast_rerun.csv"
+filename_save = start_time.strftime("%Y%m%d") + "-" + end_time.strftime("%Y%m%d") + "_forecast_rerun1.csv"
 end_time = end_time + datetime.timedelta(days=1)
 
 headers = []
@@ -49,47 +49,47 @@ while(time < end_time):
     hour = time.hour
 
     # MET post-processed
-    try:
-        filename = f"https://thredds.met.no/thredds/dodsC/metpparchive/{year}/{month:02}/{day:02}/met_forecast_1_0km_nordic_{year}{month:02}{day:02}T{hour:02}Z.nc"
-        ncfile   = netCDF4.Dataset(filename,"r")
+    # try:
+    #     filename = f"https://thredds.met.no/thredds/dodsC/metpparchive/{year}/{month:02}/{day:02}/met_forecast_1_0km_nordic_{year}{month:02}{day:02}T{hour:02}Z.nc"
+    #     ncfile   = netCDF4.Dataset(filename,"r")
 
-        if setup1:
-            # Get indices of closest grid point to coordinates on first iteration
-            # Code adapted from https://github.com/metno/NWPdocs/wiki/Examples
-            crs = pyproj.CRS.from_cf(
-                {
-                    "grid_mapping_name": "lambert_conformal_conic",
-                    "standard_parallel": [63.3, 63.3],
-                    "longitude_of_central_meridian": 15.0,
-                    "latitude_of_projection_origin": 63.3,
-                    "earth_radius": 6371000.0,
-                }
-            )
-            # Transformer to project from ESPG:4368 (WGS:84) to our lambert_conformal_conic
+    #     if setup1:
+    #         # Get indices of closest grid point to coordinates on first iteration
+    #         # Code adapted from https://github.com/metno/NWPdocs/wiki/Examples
+    #         crs = pyproj.CRS.from_cf(
+    #             {
+    #                 "grid_mapping_name": "lambert_conformal_conic",
+    #                 "standard_parallel": [63.3, 63.3],
+    #                 "longitude_of_central_meridian": 15.0,
+    #                 "latitude_of_projection_origin": 63.3,
+    #                 "earth_radius": 6371000.0,
+    #             }
+    #         )
+    #         # Transformer to project from ESPG:4368 (WGS:84) to our lambert_conformal_conic
         
-            proj = pyproj.Proj.from_crs(4326, crs, always_xy=True)
-            # Compute projected coordinates of lat/lon point
+    #         proj = pyproj.Proj.from_crs(4326, crs, always_xy=True)
+    #         # Compute projected coordinates of lat/lon point
 
-            X,Y = proj.transform(lon,lat)
+    #         X,Y = proj.transform(lon,lat)
 
-            # Find nearest neighbour
-            x = ncfile.variables["x"][:]
-            y = ncfile.variables["y"][:]
+    #         # Find nearest neighbour
+    #         x = ncfile.variables["x"][:]
+    #         y = ncfile.variables["y"][:]
 
-            Ix1 = np.argmin(np.abs(x - X))
-            Iy1 = np.argmin(np.abs(y - Y))
+    #         Ix1 = np.argmin(np.abs(x - X))
+    #         Iy1 = np.argmin(np.abs(y - Y))
 
-            setup1 = False
-        predictions_i = {}
-        predictions_i['times1'] = ncfile.variables["time"][:]
-        for variable in variables_1:
-            predictions_i[variable] = ncfile.variables[variable][:,Iy1,Ix1]
-    except:
-        with open("missing_dates.txt", 'a') as errorfile:
-            errorfile.write(time.strftime("%d.%m.%Y. %H:%M: post-processed data missing\n"))
-            print('Post-processed data missing')
-        for key in variables_1 + ["times1"]:
-            predictions_i[key] = predictions_i[key][6:]
+    #         setup1 = False
+    #     predictions_i = {}
+    #     predictions_i['times1'] = ncfile.variables["time"][:]
+    #     for variable in variables_1:
+    #         predictions_i[variable] = ncfile.variables[variable][:,Iy1,Ix1]
+    # except:
+    #     with open("missing_dates.txt", 'a') as errorfile:
+    #         errorfile.write(time.strftime("%d.%m.%Y. %H:%M: post-processed data missing\n"))
+    #         print('Post-processed data missing')
+    #     for key in variables_1 + ["times1"]:
+    #         predictions_i[key] = predictions_i[key][6:]
             # n_errors += 1
 
     # MEPS

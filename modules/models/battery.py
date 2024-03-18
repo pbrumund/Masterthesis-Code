@@ -37,7 +37,7 @@ def get_shepherd_model() -> Battery:
     }
 
     # no-load voltage
-    E = E0 - K*Q/(Q-int_idt)+ A*ca.exp(-B*int_idt) # Factor i missing in Tremblay paper
+    E = E0 - K*Q/(Q-int_idt) + A*ca.exp(-B*int_idt) # Factor i missing in Tremblay paper
 
     # Outputs
     V_batt = N_s*(E - R*i/N_p)

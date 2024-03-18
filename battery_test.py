@@ -3,7 +3,7 @@ import matplotlib.pyplot as plt
 from modules.models.battery import get_shepherd_model_LiIon
 
 if __name__ == "__main__":
-    battery = get_shepherd_model_LiIon(N_p=35000, N_s = 310)
+    battery = get_shepherd_model_LiIon(N_p=32000, N_s = 330)
     battery.setup_integrator(dt=600)
     p_const = 32000
     n = 6    
