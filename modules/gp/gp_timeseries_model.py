@@ -96,6 +96,7 @@ class TimeseriesModel(WindPredictionGP):
             self.predictions_mean = None
             self.predictions_var = None
             self.prediction_times = None
+        if self.opt.get('do_not_load_predictions'): self.predictions_mean = None
 
     def get_training_data_prior(self):
         opt = {}

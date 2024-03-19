@@ -20,7 +20,7 @@ epsilon = 0.1
 std_factor = norm.ppf(1-epsilon)
 std_list = (-std_factor, 0, std_factor)
 
-mpc_opt = get_mpc_opt(N=30, std_list_multistage=std_list, use_simple_scenarios=True, dE_min=0)#,  t_start=datetime.datetime(2022,12,6), t_end=datetime.datetime(2022,12,8))
+mpc_opt = get_mpc_opt(N=30, std_list_multistage=std_list, use_simple_scenarios=True, dE_min=5000, include_last_measurement=True, use_soft_constraints_state=False)#,  t_start=datetime.datetime(2022,12,6), t_end=datetime.datetime(2022,12,8))
 gp_opt = get_gp_opt(dt_pred = mpc_opt['dt'], steps_forward = mpc_opt['N'], verbose=False)
 gp = TimeseriesModel(gp_opt)
 ohps.setup_integrator(dt=60*mpc_opt['dt'])
@@ -61,7 +61,7 @@ if plot:
         fig_pred, ax_pred = plt.subplots(2, sharex=True, num='Multi-stage MPC, wind predictions')
 # save trajectories to file
 dims = {'Power output': 4, 'Power demand': 1, 'SOC': 1, 'Inputs': 2}
-data_saver = DataSaving('multi-stage_mpc', mpc_opt, gp_opt, dims)
+data_saver = DataSaving('multi-stage_mpc_without_llc', mpc_opt, gp_opt, dims)
 
 # load trajectories if possible
 start = 0
@@ -120,9 +120,9 @@ for k, t in enumerate(times, start=start):
     u_k = multistage_mpc.get_u_next_fun(v_opt)
     s_P_k = multistage_mpc.get_s_P_next_fun(v_opt)
     # Simulate with low level controller adding uncertainty to battery
-    i_opt, P_gtg_opt, x_next = llc.simulate(t, x_k, u_k, s_P_k, P_demand[0])
-    u_k[0] = P_gtg_opt
-    u_k[1] = i_opt
+    # i_opt, P_gtg_opt, x_next = llc.simulate(t, x_k, u_k, s_P_k, P_demand[0])
+    # u_k[0] = P_gtg_opt
+    # u_k[1] = i_opt
 
     # save state, input, SOC and power trajectories
     x_traj[k,:] = x_k
