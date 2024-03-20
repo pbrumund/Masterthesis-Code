@@ -343,7 +343,7 @@ class MultistageMPCLoadShifting(MPC):
         self.J_s_x_fun = ca.Function('J_s_x', [v_vec, p], [self.J_s_x])
         
     def get_initial_guess(self, v_last = None, wind_power_vec = None, x0 = None, 
-                          E_target = None):
+                          P_demand = None):
         if v_last is not None:
             # use last solution to generate initial guess
             v_last = list(v_last[1:])
@@ -363,8 +363,6 @@ class MultistageMPCLoadShifting(MPC):
         if wind_power_vec is None:
             wind_power_vec = np.zeros(self.horizon)
         
-        if E_target is None:
-            E_target = 40000*self.horizon
         for i, nodes_i in enumerate(self.nodes):
             for node in nodes_i:
                 u_init = ca.DM.zeros(self.ohps.nu)
@@ -377,21 +375,22 @@ class MultistageMPCLoadShifting(MPC):
                 P_bat = self.ohps.get_P_bat(x_init, u_init, w)
                 P_wtg = self.ohps.get_P_wtg(x_init, u_init, w)
                 if i == self.horizon-1:
-                    s_E_init = E_target
+                    s_E_init = ca.sum1(P_demand)
                 else:
                     s_E_init = ca.DM.zeros(0)
                 if self.opt['use_path_constraints_energy']:
-                    s_E_path_init = 0
+                    s_E_path_init = ca.cumsum(P_demand)[i]
                 else:
                     s_E_path_init = ca.DM.zeros(0)
+                E_shifted_init = ca.cumsum(P_demand)[i]
                 s_x_init = 0
-                v_init_i_k = node.get_v_fun(x_init, u_init, s_x_init, s_E_path_init, s_E_init)
+                v_init_i_k = node.get_v_fun(x_init, u_init, s_x_init, s_E_path_init, s_E_init, E_shifted_init)
                 v_init.append(v_init_i_k)
             x_init_list.append(x_init)
             u_init_list.append(u_init)
         return ca.vertcat(*v_init)
                 
-    def get_parameters(self, x0, P_gtg_last, P_out_last, P_min, E_target, E_target_path=None, E_backoff=None):
+    def get_parameters(self, x0, P_gtg_last, P_out_last, P_min, E_shifted_last, P_demand, E_backoff=None):
         p = []
         for i, nodes_i in enumerate(self.nodes):
             for node in nodes_i:
@@ -400,11 +399,10 @@ class MultistageMPCLoadShifting(MPC):
                     p_i_k.append(x0)
                     p_i_k.append(P_gtg_last)
                     p_i_k.append(P_out_last)
-                if i == self.horizon-1:
-                    p_i_k.append(E_target)
+                    p_i_k.append(E_shifted_last)
                 if self.opt['use_path_constraints_energy']:
                     p_i_k.append(E_backoff)
-                    p_i_k.append(E_target_path[i])           
+                p_i_k.append(P_demand[i])           
                 p_i_k.append(P_min)
                 p_i_k = node.get_p_fun(*p_i_k)
                 p.append(p_i_k)
@@ -415,9 +413,9 @@ class TreeNode:
     def __init__(self, ohps: OHPS, time_index, node_index, opt, probability, 
                  predecessor=None, wind_pred=None):
         self.ohps = ohps
-        self.time_index = time_index
-        self.node_index = node_index
-        self.predecessor = predecessor
+        self.time_index = time_index #k
+        self.node_index = node_index #j
+        self.predecessor = predecessor #p(j)
         if self.predecessor is None:
             self.is_root_node = True
         else:
@@ -463,14 +461,17 @@ class TreeNode:
             self.s_E_path = ca.MX.sym(f's_E_path_{self.time_index}_{self.node_index}', 0)
             self.s_E_path_lb = ca.DM.zeros(0)
             self.s_E_path_ub = ca.DM.zeros(0)
+        self.E_shifted = ca.MX.sym(f'E_shifted_{self.time_index}_{self.node_index}')
+        self.E_shifted_lb = -ca.inf
+        self.E_shifted_ub = ca.inf
         self.s_x = ca.MX.sym(f's_x_{self.time_index}_{self.node_index}')
         self.s_x_lb = 0
         self.s_x_ub = ca.inf
-        self.v = ca.vertcat(self.u, self.x, self.s_x, self.s_E_path, self.s_E)
-        self.v_lb = ca.vertcat(self.u_lb, self.x_lb, self.s_E_path_lb, self.s_x_lb, self.s_E_lb)
-        self.v_ub = ca.vertcat(self.u_ub, self.x_ub, self.s_E_path_ub, self.s_x_ub, self.s_E_ub)
+        self.v = ca.vertcat(self.u, self.x, self.s_x, self.s_E_path, self.E_shifted, self.s_E)
+        self.v_lb = ca.vertcat(self.u_lb, self.x_lb, self.s_E_path_lb, self.s_x_lb, self.s_E_lb, self.E_shifted_lb)
+        self.v_ub = ca.vertcat(self.u_ub, self.x_ub, self.s_E_path_ub, self.s_x_ub, self.s_E_ub, self.E_shifted_ub)
         self.get_v_fun = ca.Function(f'get_v_{self.time_index}_{self.node_index}', 
-                                     [self.x, self.u, self.s_x, self.s_E_path, self.s_E], [self.v])
+                                     [self.x, self.u, self.s_x, self.s_E_path, self.s_E, self.E_shifted], [self.v])
         self.get_u_fun = ca.Function(f'get_u_{self.time_index}_{self.node_index}', 
                                      [self.v], [self.u])
         self.get_x_fun = ca.Function(f'get_x_{self.time_index}_{self.node_index}', 
@@ -479,6 +480,8 @@ class TreeNode:
                                      [self.v], [self.s_E])
         self.get_s_x_fun = ca.Function(f'get_s_x_{self.time_index}_{self.node_index}',
                                      [self.v], [self.s_x])
+        self.get_E_shifted_fun = ca.Function(f'get_E_shifted_{self.time_index}_{self.node_index}',
+                                     [self.v], [self.E_shifted])
         
     def get_parameters(self):
         self.param = []
@@ -489,9 +492,11 @@ class TreeNode:
             self.param.append(self.P_gtg_last)
             self.P_out_last = ca.MX.sym('P_out_last')
             self.param.append(self.P_out_last)
-        if self.is_leaf_node:
-            self.E_target = ca.MX.sym('E_target')
-            self.param.append(self.E_target)
+            self.E_shifted_0 = ca.MX.sym('E_shifted_0')
+            self.param.append(self.E_shifted_0)
+        # if self.is_leaf_node:
+        #     self.E_target = ca.MX.sym('E_target')
+        #     self.param.append(self.E_target)
         if self.wind_pred is None:
             self.wind_speed = ca.MX.sym(f'wind_speed_{self.time_index}_{self.node_index}')
             self.param.append(self.wind_speed)
@@ -500,9 +505,9 @@ class TreeNode:
                 self.param.append(self.wind_std)
         if self.opt['use_path_constraints_energy']:
             self.E_backoff = ca.MX.sym('E_backoff')
-            self.E_target_path = ca.MX.sym('E_target_path')
             self.param.append(self.E_backoff)
-            self.param.append(self.E_target_path)
+        self.P_demand = ca.MX.sym('P_demand') 
+        self.param.append(self.P_demand)
         self.P_min = ca.MX.sym(f'P_min_{self.time_index}_{self.node_index}')
         self.param.append(self.P_min)
         self.p = ca.vertcat(*self.param)
@@ -546,13 +551,24 @@ class TreeNode:
         g_lb.append(g_demand_lb)
         g_ub.append(g_demand_ub)
         self.P_out = P_gtg + P_wtg + P_bat
+        # State constraints for shifted power
+        if self.is_root_node:
+            E_shifted_now = self.E_shifted_0
+        else:
+            E_shifted_now = self.predecessor.E_shifted
+        g_E_shifted = E_shifted_now + (self.P_out-self.P_demand)*self.opt['dt']/60 - self.E_shifted
+        g_E_shifted_lb = 0
+        g_E_shifted_ub = 0
+        self.constraints.append(g_E_shifted)
+        g_lb.append(g_E_shifted_lb)
+        g_ub.append(g_E_shifted_ub)
         if self.is_root_node:
             self.P_sum = P_gtg + P_wtg + P_bat
         else:
             self.P_sum = self.predecessor.P_sum + P_gtg + P_wtg + P_bat
         if self.is_leaf_node:
             # sum(P_out) + s_E >= E_target
-            g_E = self.E_target - self.P_sum - self.s_E
+            g_E = -self.E_shifted
             g_E_lb = -ca.inf
             g_E_ub = 0
             self.constraints.append(g_E)
@@ -560,9 +576,9 @@ class TreeNode:
             g_ub.append(g_E_ub)
         if self.opt['use_path_constraints_energy']:
             # sum(P_out) + s_E >= E_target - E_backoff
-            g_E_lower = self.E_target_path - self.E_backoff - self.P_sum - self.s_E_path
+            g_E_lower = -self.E_shifted - self.E_backoff - self.s_E_path
             # sum(P_out) - s_E <= E_target + E_backoff
-            g_E_upper = self.P_sum - self.s_E_path - self.E_target_path - self.E_backoff
+            g_E_upper = self.E_shifted - self.s_E_path - self.E_backoff
             self.constraints.append(ca.vertcat(g_E_lower, g_E_upper))
             g_lb.append(-ca.inf*ca.DM.ones(2))
             g_ub.append(ca.DM.zeros(2))
@@ -613,7 +629,7 @@ class TreeNode:
         self.J_bat = -self.opt['param']['k_bat']*SOC
         self.J_u = self.u.T@self.opt['param']['R_input']@self.u
         if self.is_leaf_node:
-            self.J_s_E = self.opt['param']['r_s_E']*(self.s_E/200000)**2
+            self.J_s_E = self.opt['param']['r_s_E']*(self.s_E)**2
         else:
             self.J_s_E = 0
         if self.opt['use_soft_constraints_state']:
@@ -621,7 +637,7 @@ class TreeNode:
         else:
             self.J_s_x = 0
         if self.opt['use_path_constraints_energy']:
-            self.J_s_E_path = self.opt['param']['r_s_E']*(self.s_E_path/200000)**2
+            self.J_s_E_path = self.opt['param']['r_s_E']*(self.s_E_path)**2
         
         self.J = (self.J_gtg+self.J_bat+self.J_u+self.J_dP+self.J_s_E+self.J_s_x)*self.probability
         

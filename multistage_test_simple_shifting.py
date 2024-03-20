@@ -58,6 +58,7 @@ dE = 0
 E_tot = 0
 E_sched = 0
 dE_sched = 0
+E_shifted = 0
 E_target_lt = np.array([])
 scheduler = DayAheadScheduler(ohps, data_handler, mpc_opt)
 
@@ -74,7 +75,7 @@ if plot:
         fig_E_tot, ax_E_tot = plt.subplots(2, sharex=True, num='Multi-stage MPC, total Energy output')
 # save trajectories to file
 dims = {'Power output': 4, 'Power demand': 1, 'SOC': 1, 'Inputs': 2}
-data_saver = DataSaving('multi-stage_mpc_shifting_without_llc', mpc_opt, gp_opt, dims)
+data_saver = DataSaving('multi-stage_mpc_shifting_without_llc_10MWh', mpc_opt, gp_opt, dims)
 
 # load trajectories if possible
 start = 0
@@ -119,10 +120,10 @@ for k, t in enumerate(times, start=start):
     
     multistage_mpc.get_optimization_problem(t, train)
 
-    p = multistage_mpc.get_parameters(x_k, P_gtg_last, P_out_last, P_min, E_target, ca.cumsum(P_demand), 6*50000)
+    p = multistage_mpc.get_parameters(x_k, P_gtg_last, P_out_last, P_min, E_shifted, P_demand, 10000)
 
     if v_init_next is None:
-        v_init = multistage_mpc.get_initial_guess(v_last, P_wtg, x_k, E_target)
+        v_init = multistage_mpc.get_initial_guess(v_last, P_wtg, x_k, P_demand)
         # v_init = multistage_mpc.get_initial_guess(None, None, x_k, P_demand)
 
     v_opt = multistage_mpc.solver(v_init, p)
@@ -153,6 +154,7 @@ for k, t in enumerate(times, start=start):
     P_bat = ohps.get_P_bat(x_k, u_k, w_k)
     P_wtg = ohps.get_P_wtg(x_k, u_k, w_k)
     P_total = P_gtg + P_bat + P_wtg
+    E_shifted += (P_total-P_demand[0])*1/6
     E_tot += P_total/6
     P_traj[k,:] = ca.vertcat(P_gtg, P_bat, P_wtg, P_total, P_demand[0])
     SOC_traj[k] = ohps.get_SOC_bat(x_k, u_k, w_k)
