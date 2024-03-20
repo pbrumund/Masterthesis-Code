@@ -96,7 +96,7 @@ class NominalMPCLoadShifting(NominalMPC):
         else:
             J_s_x = 0
         if self.opt['use_path_constraints_energy']:
-            J_s_E = self.param['r_s_E']*(s_E/200000)**2
+            J_s_E = self.param['r_s_E']*(s_E)**2
         else:
             J_s_E = 0
         # J_gtg_dP = self.param['k_gtg_dP']*ca.log(100*ca.fabs(u_gtg)/self.ohps.gtg.bounds['ubu']+1)
@@ -163,7 +163,7 @@ class NominalMPCLoadShifting(NominalMPC):
         self.J_bat += J_bat
         J += J_bat
         s_E = self.get_s_from_v_fun(v)
-        J_dE = self.param['r_s_E']*(s_E/200000)**2
+        J_dE = self.param['r_s_E']*(s_E)**2
         J += J_dE
         self.J_s_E = J_dE
         # Parameter tuning
@@ -200,6 +200,7 @@ class NominalMPCLoadShifting(NominalMPC):
         g_ub = []
         P_sum = 0
         P_out = []
+        E_tot_vec = []
         for i in range(self.horizon):
             #X_mat[i,:] = x_i+1, U_mat[i,:] = u_i
             if i == 0:
@@ -222,6 +223,7 @@ class NominalMPCLoadShifting(NominalMPC):
             P_bat = self.ohps.get_P_bat(x_i, u_i, wind_speeds[i])
             P_wtg = self.ohps.get_P_wtg(x_i, u_i, wind_speeds[i])
             P_sum += P_gtg + P_wtg + P_bat
+            E_tot_vec.append(P_sum/6)
             P_out.append(P_gtg + P_wtg + P_bat)
             g_demand = P_min - P_gtg - P_bat - P_wtg
             g_demand_lb = -ca.inf
@@ -265,6 +267,8 @@ class NominalMPCLoadShifting(NominalMPC):
         P_out = ca.vertcat(*P_out)
         self.g_fun = ca.Function('constraints', [v, p], [g], ['v', 'p'], ['g']) 
         self.P_out_fun = ca.Function('get_P_sched', [v, p], [P_out])
+        self.E_tot_vec = ca.vertcat(*E_tot_vec)
+        self.E_tot_fun = ca.Function('E_tot', [v, p], [self.E_tot_vec])
         return g, g_lb, g_ub
     
     def get_initial_guess(self, p, v_last = None):
