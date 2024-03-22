@@ -6,7 +6,7 @@ import matplotlib.pyplot as plt
 
 from modules.mpc import ChanceConstrainedMPC, get_mpc_opt
 from modules.models import OHPS
-from modules.gp import TimeseriesModel as WindPredictionGP
+from modules.gp import DirectGPEnsemble as WindPredictionGP
 from modules.gp import DataHandler
 from modules.gp import get_gp_opt
 from modules.plotting import TimeseriesPlot
@@ -17,7 +17,7 @@ plot = False
 plot_predictions = True
 ohps = OHPS()
 
-mpc_opt = get_mpc_opt(N=60, use_soft_constraints_state=False, epsilon_chance_constraint=0.1)#, t_start=datetime.datetime(2022,12,6), t_end=datetime.datetime(2022,12,8))
+mpc_opt = get_mpc_opt(N=30, use_soft_constraints_state=False)#, t_start=datetime.datetime(2022,12,6), t_end=datetime.datetime(2022,12,8))
 # mpc_opt['param']['r_s_x'] = 1e6
 chance_constrained_mpc = ChanceConstrainedMPC(ohps, mpc_opt)
 chance_constrained_mpc.get_optimization_problem()
@@ -59,7 +59,7 @@ if plot:
 
 # save trajectories to file
 dims = {'Power output': 4, 'Power demand': 1, 'SOC': 1, 'Inputs': 2} # State: 1
-data_saver = DataSaving('chance_constrained_mpc_without_llc_rerun', mpc_opt, gp_opt, dims)
+data_saver = DataSaving('chance_constrained_mpc_without_llc_direct_rerun', mpc_opt, gp_opt, dims)
 
 # load trajectories if possible
 start = 0
@@ -89,7 +89,7 @@ for k, t in enumerate(times, start=start):
              for w in wind_speeds_nwp]
     # wind_speeds = ca.vertcat(*wind_speeds)
     train = (k==start) or (t.minute==0)
-    wind_speeds_gp, var_gp = gp.predict_trajectory(t, chance_constrained_mpc.horizon, train, include_last_measurement=True)
+    wind_speeds_gp, var_gp = gp.predict_trajectory(t, chance_constrained_mpc.horizon, include_last_measurement=True)
     std_gp = np.sqrt(var_gp)
     if P_demand_last is not None:
         P_demand = ca.vertcat(P_demand_last[1:], P_wtg[-1] + 0.8*ohps.P_gtg_max)

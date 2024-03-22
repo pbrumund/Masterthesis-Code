@@ -15,7 +15,7 @@ from modules.mpc import LowLevelController
 plot = False
 ohps = OHPS()
 
-mpc_opt = get_mpc_opt(N=30)
+mpc_opt = get_mpc_opt(N=30, use_soft_constraints_state=False)
 nominal_mpc = NominalMPC(ohps, mpc_opt)
 nominal_mpc.get_optimization_problem()
 
