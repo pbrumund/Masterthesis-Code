@@ -17,7 +17,7 @@ plot = False
 plot_predictions = False
 ohps = OHPS()
 
-mpc_opt = get_mpc_opt(N=30)
+mpc_opt = get_mpc_opt(N=30, use_soft_constraints_state=False)
 nominal_mpc = NominalMPC(ohps, mpc_opt)
 nominal_mpc.get_optimization_problem()
 
@@ -58,7 +58,7 @@ if plot:
 
 # save trajectories to file
 dims = {'Power output': 4, 'Power demand': 1, 'SOC': 1, 'Inputs': 2}
-data_saver = DataSaving('nominal_mpc_gp_forecast', mpc_opt, gp_opt, dims)
+data_saver = DataSaving('nominal_mpc_gp_forecast_without_llc', mpc_opt, gp_opt, dims)
 
 # load trajectories if possible
 start = 0
@@ -87,7 +87,7 @@ for k, t in enumerate(times, start=start):
              for w in wind_speeds_nwp]
     # wind_speeds = ca.vertcat(*wind_speeds)
     train = (k==start) or (t.minute==0)
-    wind_speeds_gp, gp_var = gp.predict_trajectory(t, nominal_mpc.horizon, train)# mean predicted by gp
+    wind_speeds_gp, gp_var = gp.predict_trajectory(t, nominal_mpc.horizon, train, include_last_measurement=True)# mean predicted by gp
     if P_demand_last is not None:
         P_demand = ca.vertcat(P_demand_last[1:], P_wtg[-1] + 0.8*ohps.P_gtg_max)
     else:
@@ -116,9 +116,9 @@ for k, t in enumerate(times, start=start):
     s_P_opt = nominal_mpc.get_s_from_v_fun(v_opt)
     s_P_k = s_P_opt[0]
     # Simulate with low level controller adding uncertainty to battery
-    i_opt, P_gtg_opt, x_next = llc.simulate(t, x_k, u_k, s_P_k, P_demand[0])
-    u_k[0] = P_gtg_opt
-    u_k[1] = i_opt
+    # i_opt, P_gtg_opt, x_next = llc.simulate(t, x_k, u_k, s_P_k, P_demand[0])
+    # u_k[0] = P_gtg_opt
+    # u_k[1] = i_opt
 
 
     # save state, input, SOC and power trajectories

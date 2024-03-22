@@ -30,6 +30,7 @@ class ChanceConstrainedMPC(NominalMPC):
         X_ub = ca.DM.ones(self.horizon)@self.ohps.ubx.T
         s_P = ca.MX.sym('s_P', self.horizon)    # for soft power constraints
         s_P_lb = ca.DM.zeros(self.horizon)
+        s_P_lb[0] = -ca.inf
         s_P_ub = ca.inf*ca.DM.ones(self.horizon)
         # x_lb_sc - x - s_x <=0, x - s_x - x_ub_sc <= 0
         s_x = ca.MX.sym('s_xl', self.horizon) # for x + s_x >= x_lb_sc, x - s_x <= x_ub_sc
@@ -112,13 +113,16 @@ class ChanceConstrainedMPC(NominalMPC):
             P_gtg = self.ohps.get_P_gtg(x_i, u_i, wind_speeds[i])
             P_bat = self.ohps.get_P_bat(x_i, u_i, wind_speeds[i])
             P_wtg_backoff = self.ohps.get_P_wtg(x_i, u_i, wind_speeds_backoff[i])
+            P_wtg_upper = self.ohps.get_P_wtg(x_i, u_i, wind_speeds_upper[i])
             # assume there are no scenarios where the wind speed can be above cut-out or below rated speed
             # If probability of wind speed above cut-out is greater than epsilon, assume wind power of 0
-            P_wtg_chance_constraint = ca.if_else(
-                wind_speeds_upper[i]>self.ohps.wind_turbine.cut_out_speed,
-                0, P_wtg_backoff)
+            P_wtg_chance_constraint = ca.fmin(P_wtg_backoff, P_wtg_upper)
+            # P_wtg_chance_constraint = ca.if_else(
+            #     self.ohps.wind_turbine.scale_wind_speed(wind_speeds_upper[i])>self.ohps.wind_turbine.cut_out_speed,
+            #     0, P_wtg_backoff)
             g_demand = P_demand[i] - P_gtg - P_bat - P_wtg_chance_constraint - s_P[i]
             g_demand_lb = -ca.inf
+            if i == 0: g_demand_lb = 0
             g_demand_ub = 0
             g.append(g_demand)
             g_lb.append(g_demand_lb)
