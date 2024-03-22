@@ -51,6 +51,7 @@ llc = LowLevelController(ohps, data_handler, mpc_opt)
 x_k = ohps.x0
 v_last = None
 v_init_next = None
+P_demand_last = None
 P_out_last = 40000
 P_min = 16000
 P_gtg_last = ohps.gtg.bounds['ubu']
@@ -75,7 +76,7 @@ if plot:
         fig_E_tot, ax_E_tot = plt.subplots(2, sharex=True, num='Multi-stage MPC, total Energy output')
 # save trajectories to file
 dims = {'Power output': 4, 'Power demand': 1, 'SOC': 1, 'Inputs': 2}
-data_saver = DataSaving('multi-stage_mpc_shifting_without_llc_10MWh', mpc_opt, gp_opt, dims)
+data_saver = DataSaving('multi-stage_mpc_shifting_fixed_demand', mpc_opt, gp_opt, dims)
 
 # load trajectories if possible
 start = 0
@@ -110,7 +111,11 @@ for k, t in enumerate(times, start=start):
     wind_speeds_nwp = [data_handler.get_NWP(t, i) for i in range(multistage_mpc.horizon)]
     P_wtg = [4*ohps.wind_turbine.power_curve_fun(ohps.wind_turbine.scale_wind_speed(w)) for w in wind_speeds_nwp]
     wind_power_nwp = np.array([ohps.get_P_wtg(0,0,w) for w in wind_speeds_nwp]).reshape(-1)
-    P_demand = scheduler.get_P_demand(t, x_k, dE)
+    # P_demand = scheduler.get_P_demand(t, x_k, dE)
+    if P_demand_last is not None:
+        P_demand = ca.vertcat(P_demand_last[1:], P_wtg[-1] + 0.8*ohps.P_gtg_max)
+    else:
+        P_demand = ca.vertcat(*P_wtg) + 0.8*ohps.gtg.bounds['ubu']
     E_sched += P_demand[0]
     E_target = ca.sum1(P_demand) + dE_sched # total scheduled demand plus compensation for previously not satisfied demand
 
@@ -225,6 +230,7 @@ for k, t in enumerate(times, start=start):
     x_k = ohps.get_next_state(x_k, u_k)
 
     # save last solution for next iteration
+    P_demand_last = P_demand
     v_last = multistage_mpc.get_v_middle_fun(v_opt)
     # v_init_next = multistage_mpc.get_initial_guess(v_last, P_wtg, x_k, P_demand)
     P_out_last = P_total
