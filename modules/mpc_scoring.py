@@ -20,8 +20,8 @@ def get_power_error(mpc_name, mpc_opt, gp_opt, run_id=None):
     array_dims = {'Power output': 4, 'Power demand': 1, 'SOC': 1, 'Inputs': 2}
     data_loader = DataSaving(mpc_name, mpc_opt, gp_opt, array_dims, run_id)
     data, times = data_loader.load_trajectories()
-    P_demand = data['Power demand'].reshape(-1)
-    P_total = data['Power output'][:,-1]
+    P_demand = data['Power demand'].reshape(-1)[:52272] # leave out last two days to have same length of the trajectory
+    P_total = data['Power output'][:,-1][:52272]
     E_error = np.sum(np.abs((P_demand-P_total))/6000) # MWh
     E_demand = np.sum((P_demand)/6000)
     return E_error, E_error/E_demand
@@ -31,10 +31,10 @@ def get_gtg_power(mpc_name, mpc_opt, gp_opt, run_id=None):
     array_dims = {'Power output': 4, 'Power demand': 1, 'SOC': 1, 'Inputs': 2}
     data_loader = DataSaving(mpc_name, mpc_opt, gp_opt, array_dims, run_id)
     data, times = data_loader.load_trajectories()
-    P_prod = data['Power output'][:,0] + data['Power output'][:,2]
-    P_gtg = data['Power output'][:,0]
-    P_gtg_total = np.sum(P_gtg/6000) # MWh
-    P_prod_total = np.sum(P_prod/6000)
+    P_prod = (data['Power output'][:,0] + data['Power output'][:,2])[:52272]
+    P_gtg = data['Power output'][:,0][:52272]
+    P_gtg_total = np.sum(P_gtg)/6000000 # GWh
+    P_prod_total = np.sum(P_prod)/6000000
     return P_gtg_total, P_gtg_total/P_prod_total
 
 def get_gtg_emissions(mpc_name, mpc_opt, gp_opt, run_id=None):
@@ -46,9 +46,23 @@ def get_gtg_emissions(mpc_name, mpc_opt, gp_opt, run_id=None):
     data, times = data_loader.load_trajectories()
     P_gtg = data['Power output'][:,0].reshape(-1)
     eta_gtg = np.array([ohps.gtg.eta_fun(P_gtg_i/ohps.P_gtg_max) for P_gtg_i in P_gtg]).reshape(-1)
-    fuel = np.where(P_gtg<1, 0, P_gtg/eta_gtg)
-    return np.mean(fuel), np.mean(eta_gtg)
+    fuel = np.where(P_gtg<1, 0, P_gtg/eta_gtg)/1000 # MW
+    return np.mean(fuel[:52272]), np.mean(eta_gtg[:52272])
     
+def get_energy_constraint_violation(mpc_name, mpc_opt, gp_opt, run_id=None):
+    array_dims = {'Power output': 4, 'Power demand': 1, 'SOC': 1, 'Inputs': 2}
+    data_loader = DataSaving(mpc_name, mpc_opt, gp_opt, array_dims, run_id)
+    data, times = data_loader.load_trajectories()
+    P_demand = data['Power demand'].reshape(-1)[:52272] # leave out last two days to have same length of the trajectory
+    P_total = data['Power output'][:,-1][:52272]
+    E_shifted = np.cumsum((P_total-P_demand)/6000)
+    constraint_violation = np.where(
+        np.abs(E_shifted)>10,
+        np.abs(E_shifted)-10,
+        0
+    )
+    return np.mean(constraint_violation), np.max(constraint_violation), np.nonzero(constraint_violation)[0].shape[0]/E_shifted.shape[0]
+
 class DataSaving:
     def __init__(self, mpc_name, mpc_opt, gp_opt, array_dims, run_id=None) -> None:
         self.mpc_name = mpc_name

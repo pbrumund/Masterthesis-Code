@@ -17,7 +17,7 @@ plot = False
 plot_predictions = True
 ohps = OHPS()
 
-mpc_opt = get_mpc_opt(N=30, use_soft_constraints_state=False)#, t_start=datetime.datetime(2022,12,6), t_end=datetime.datetime(2022,12,8))
+mpc_opt = get_mpc_opt(N=36, use_soft_constraints_state=False)#, t_start=datetime.datetime(2022,12,6), t_end=datetime.datetime(2022,12,8))
 # mpc_opt['param']['r_s_x'] = 1e6
 chance_constrained_mpc = ChanceConstrainedMPC(ohps, mpc_opt)
 chance_constrained_mpc.get_optimization_problem()

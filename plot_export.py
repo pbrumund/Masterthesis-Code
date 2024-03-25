@@ -189,7 +189,7 @@ ax.grid()
 ax = axs[2]
 ax.plot(x_wind_gust_diff, mean_wind_gust_diff, label='Mean')
 ax.plot(x_wind_gust_diff, std_wind_gust_diff, label='Standard deviation')
-ax.set_xlabel('Difference of gust\nand mean wind speed')
+ax.set_xlabel('Difference of gust\nand mean wind speed (m/s)')
 # ax.set_ylabel('Prediction error (m/s)')
 ax.grid()
 handles, labels = ax.get_legend_handles_labels()
@@ -413,30 +413,32 @@ axs[1].hist(errors_in_range, bins=bins, density=True, histtype='step')
 axs[1].set_xlabel('Prediction error')
 axs[0].hist(measurements_in_range, bins=bins, density=True, histtype='step')
 axs[0].set_xlabel('Measured wind speed')
-
-wind_predicted_range = (15,16)
-indices_in_range = [i for i, v in enumerate(predictions) 
-                    if v > wind_predicted_range[0] and v <= wind_predicted_range[1]]
-errors_in_range = errors[indices_in_range]
-measurements_in_range = measurements[indices_in_range]
-mean_error = np.mean(errors_in_range)
-std_error = np.std(errors_in_range)
-norm_2_error = norm(mean_error, std_error)
-mean_meas = np.mean(measurements_in_range)
-std_meas = np.std(measurements_in_range)
-norm_2_meas = norm(mean_meas, std_meas)
-
-
-axs[1].hist(errors_in_range, bins=bins, density=True, histtype='step')
-axs[1].set_xlabel('Prediction error')
-axs[0].hist(measurements_in_range, bins=bins, density=True, histtype='step')
-axs[0].set_xlabel('Measured wind speed')
 labels.append(fr'''${wind_predicted_range[0]}\,\mathrm{"{"}m/s{"}"}\leq v_\mathrm{"{"}wind,MF{"}"}\leq {wind_predicted_range[1]}\,\mathrm{"{"}m/s{"}"}$''')
+
+# wind_predicted_range = (15,16)
+# indices_in_range = [i for i, v in enumerate(predictions) 
+#                     if v > wind_predicted_range[0] and v <= wind_predicted_range[1]]
+# errors_in_range = errors[indices_in_range]
+# measurements_in_range = measurements[indices_in_range]
+# mean_error = np.mean(errors_in_range)
+# std_error = np.std(errors_in_range)
+# norm_2_error = norm(mean_error, std_error)
+# mean_meas = np.mean(measurements_in_range)
+# std_meas = np.std(measurements_in_range)
+# norm_2_meas = norm(mean_meas, std_meas)
+
+
+# axs[1].hist(errors_in_range, bins=bins, density=True, histtype='step')
+# axs[1].set_xlabel('Prediction error')
+# axs[0].hist(measurements_in_range, bins=bins, density=True, histtype='step')
+# axs[0].set_xlabel('Measured wind speed')
+# labels.append(fr'''${wind_predicted_range[0]}\,\mathrm{"{"}m/s{"}"}\leq v_\mathrm{"{"}wind,MF{"}"}
+#               \leq {wind_predicted_range[1]}\,\mathrm{"{"}m/s{"}"}$''')
 
 axs[0].grid()
 axs[1].grid()
 axs[1].set_xlim(-6,6)
-labels.append(fr'''${wind_predicted_range[0]}\,\mathrm{"{"}m/s{"}"}\leq v_\mathrm{"{"}wind,MF{"}"}\leq {wind_predicted_range[1]}\,\mathrm{"{"}m/s{"}"}$''')
+# labels.append(fr'''${wind_predicted_range[0]}\,\mathrm{"{"}m/s{"}"}\leq v_\mathrm{"{"}wind,MF{"}"}\leq {wind_predicted_range[1]}\,\mathrm{"{"}m/s{"}"}$''')
 fig.legend(labels, loc='upper center', bbox_to_anchor = (.5, 1.15), ncol=2)
 # add plots for normal distribution
 # measurements
@@ -524,14 +526,14 @@ print(f'RMSE of GP: {rmse_gp_prior}, MAE of GP: {mae_gp_prior}')
 
 fig, axs = plt.subplots(1, 3, layout='constrained')
 ax = axs[0]
-ax.plot(alpha_vec, re_gp_prior)
+ax.plot(alpha_vec, 100*np.array(re_gp_prior))
 ax.set_xlabel(r'$\alpha$')
-ax.set_ylabel('Reliability evaluation')
+ax.set_ylabel('Reliability evaluation (\%)')
 ax.grid()
 ax = axs[1]
 ax.plot(alpha_vec, int_score_gp_prior)
 ax.set_xlabel(r'$\alpha$')
-ax.set_ylabel('Interval score')
+ax.set_ylabel('Interval score (m/s)')
 ax.grid()
 ax = axs[2]
 ax.plot(1-alpha_vec, percent_in_interval_gp_prior)
@@ -570,16 +572,16 @@ print(f'RMSE of homoscedastic GP: {rmse_gp_prior_homoscedastic}, MAE of GP: {mae
 
 fig, axs = plt.subplots(1, 3, layout='constrained')
 ax = axs[0]
-ax.plot(alpha_vec, re_gp_prior)
-ax.plot(alpha_vec, re_gp_prior_homoscedastic)
+ax.plot(alpha_vec, 100*np.array(re_gp_prior))
+ax.plot(alpha_vec, 100*np.array(re_gp_prior_homoscedastic))
 ax.set_xlabel(r'$\alpha$')
-ax.set_ylabel('Reliability evaluation')
+ax.set_ylabel('Reliability evaluation (\%)')
 ax.grid()
 ax = axs[1]
 ax.plot(alpha_vec, int_score_gp_prior)
 ax.plot(alpha_vec, int_score_gp_prior_homoscedastic)
 ax.set_xlabel(r'$\alpha$')
-ax.set_ylabel('Interval score')
+ax.set_ylabel('Interval score (m/s)')
 ax.grid()
 ax = axs[2]
 ax.plot(1-alpha_vec, percent_in_interval_gp_prior)
@@ -598,7 +600,8 @@ mae_post = np.zeros(steps_forward)
 re_post = np.zeros(steps_forward)
 score_post = np.zeros(steps_forward)
 
-trajectories_mean_post, trajectories_var_post = get_posterior_trajectories(opt)
+trajectories_mean_post = np.loadtxt('modules/gp/scoring/trajectories_mean_post_36__.csv')
+trajectories_var_post = np.loadtxt('modules/gp/scoring/trajectories_var_post_36__.csv')#get_posterior_trajectories(opt)
 # trajectories_mean_post = np.loadtxt('gp/scoring/trajectories_mean_post.csv')
 # trajectories_var_post = np.loadtxt('gp/scoring/trajectories_var_post.csv')
 # first dimension: time of prediction, second dimension: number of steps forward
@@ -635,7 +638,8 @@ mae_direct = np.zeros(steps_forward)
 re_direct = np.zeros(steps_forward)
 score_direct = np.zeros(steps_forward)
 
-trajectories_mean_direct, trajectories_var_direct = get_direct_model_trajectories(opt)
+trajectories_mean_direct = np.loadtxt('modules/gp/scoring/trajectories_mean_direct.csv')#
+trajectories_var_direct = np.loadtxt('modules/gp/scoring/trajectories_var_direct.csv')#get_direct_model_trajectories(opt)
 # trajectories_mean_post = np.loadtxt('gp/scoring/trajectories_mean_post.csv')
 # trajectories_var_post = np.loadtxt('gp/scoring/trajectories_var_post.csv')
 # first dimension: time of prediction, second dimension: number of steps forward
@@ -655,25 +659,25 @@ ax = axs[0,0]
 ax.plot(hours, rmse_post, label='Time series model')
 ax.plot(hours, rmse_direct, label='Direct model')
 # ax.set_xlabel('Time predicted ahead (h)')
-ax.set_ylabel('RMSE')
+ax.set_ylabel('RMSE (m/s)')
 ax.grid()
 ax = axs[0,1]
 ax.plot(hours, mae_post, label='Time series model')
 ax.plot(hours, mae_direct, label='Direct model')
 # ax.set_xlabel('Time predicted ahead (h)')
-ax.set_ylabel('MAE')
+ax.set_ylabel('MAE (m/s)')
 ax.grid()
 ax = axs[1,0]
 ax.plot(hours, score_post, label='Time series model')
 ax.plot(hours, score_direct, label='Direct model')
 ax.set_xlabel('Time predicted ahead (h)')
-ax.set_ylabel('Interval score')
+ax.set_ylabel('Interval score (m/s)')
 ax.grid()
 ax = axs[1,1]
-ax.plot(hours, re_post, label='Time series model')
-ax.plot(hours, re_direct, label='Direct model')
+ax.plot(hours, 100*np.array(re_post), label='Time series model')
+ax.plot(hours, 100*np.array(re_direct), label='Direct model')
 ax.set_xlabel('Time predicted ahead (h)')
-ax.set_ylabel('Reliability evaluation')
+ax.set_ylabel('Reliability evaluation (\%)')
 ax.grid()
 handles, labels = ax.get_legend_handles_labels()
 fig.legend(handles, labels, loc='upper center', ncol=2, bbox_to_anchor=(.5,1.1))
@@ -682,17 +686,17 @@ plt.savefig('../Abbildungen/timeseries_vs_direct.pgf', bbox_inches='tight')
 
 """Time series with GP prior vs simple time series"""
 steps_forward = opt['steps_forward']
-rmse_simple = np.zeros(steps_forward-1)
-mae_simple = np.zeros(steps_forward-1)
-re_simple = np.zeros(steps_forward-1)
-score_simple = np.zeros(steps_forward-1)
+rmse_simple = np.zeros(steps_forward)
+mae_simple = np.zeros(steps_forward)
+re_simple = np.zeros(steps_forward)
+score_simple = np.zeros(steps_forward)
 
 trajectories_mean_simple, trajectories_var_simple = get_simple_timeseries_traj(opt)
 
 alpha = 0.1
-for i in range(opt['steps_forward']-1):
-    trajectory_simple = trajectories_mean_simple[:,i+1]
-    var_simple = trajectories_var_simple[:,i+1]
+for i in range(opt['steps_forward']):
+    trajectory_simple = trajectories_mean_simple[:,i]
+    var_simple = trajectories_var_simple[:,i]
     n_points = len(trajectory_simple)
     rmse_simple[i] = get_rmse(trajectory_measured[i:n_points+i], trajectory_simple)
     mae_simple[i] = get_mae(trajectory_measured[i:n_points+i], trajectory_simple)
@@ -701,28 +705,28 @@ for i in range(opt['steps_forward']-1):
 
 fig, axs = plt.subplots(2,2,layout='constrained', sharex=True)
 ax = axs[0,0]
-ax.plot(hours[:-1], rmse_post[:-1], label='GP Prior')
-ax.plot(hours[:-1], rmse_simple, label='Simple prior')
+ax.plot(hours, rmse_post, label='GP Prior')
+ax.plot(hours, rmse_simple, label='Simple prior')
 # ax.set_xlabel('Time predicted ahead (h)')
-ax.set_ylabel('RMSE')
+ax.set_ylabel('RMSE (m/s)')
 ax.grid()
 ax = axs[0,1]
-ax.plot(hours[:-1], mae_post[:-1], label='GP Prior')
-ax.plot(hours[:-1], mae_simple, label='Simple prior')
+ax.plot(hours, mae_post, label='GP Prior')
+ax.plot(hours, mae_simple, label='Simple prior')
 # ax.set_xlabel('Time predicted ahead (h)')
-ax.set_ylabel('MAE')
+ax.set_ylabel('MAE (m/s)')
 ax.grid()
 ax = axs[1,0]
-ax.plot(hours[:-1], score_post[:-1], label='GP Prior')
-ax.plot(hours[:-1], score_simple, label='Simple prior')
+ax.plot(hours, score_post, label='GP Prior')
+ax.plot(hours, score_simple, label='Simple prior')
 ax.set_xlabel('Time predicted ahead (h)')
-ax.set_ylabel('Interval score')
+ax.set_ylabel('Interval score (m/s)')
 ax.grid()
 ax = axs[1,1]
-ax.plot(hours[:-1], re_post[:-1], label='GP Prior')
-ax.plot(hours[:-1], re_simple, label='Simple prior')
+ax.plot(hours, 100*np.array(re_post), label='GP Prior')
+ax.plot(hours, 100*np.array(re_simple), label='Simple prior')
 ax.set_xlabel('Time predicted ahead (h)')
-ax.set_ylabel('Reliability evaluation')
+ax.set_ylabel('Reliability evaluation (\%)')
 ax.grid()
 handles, labels = ax.get_legend_handles_labels()
 fig.legend(handles, labels, loc='upper center', ncol=2, bbox_to_anchor=(.5,1.1))
@@ -805,14 +809,14 @@ for n_z in (5,10,25,50,100,200):
 fig, axs = plt.subplots(1,2, layout='constrained', sharey=True)
 handles = []
 for i, color in enumerate(['tab:blue', 'tab:orange', 'tab:green', 'tab:red', 'tab:purple', 'tab:brown']):
-    handle, = axs[0].plot(alpha_vec, re_list_heteroscedastic[i], color=color)
+    handle, = axs[0].plot(alpha_vec, 100*np.array(re_list_heteroscedastic[i]), color=color)
     handles.append(handle)
-    axs[1].plot(alpha_vec, re_list_homoscedastic[i], color=color)
+    axs[1].plot(alpha_vec, 100*np.array(re_list_homoscedastic[i]), color=color)
     axs[0].set_xlabel(r'$\alpha$')
     axs[1].set_xlabel(r'$\alpha$')
     axs[0].grid()
     axs[1].grid()
-    axs[0].set_ylabel('RE')
+    axs[0].set_ylabel('RE (\%)')
     # axs[1].plot(alpha_vec, score_list_heteroscedastic[i], color=color)
     # axs[1].plot(alpha_vec, score_list_homoscedastic[i], '--', color=color)
     # axs[1].set_xlabel('alpha')
@@ -824,10 +828,10 @@ axs[1].grid()
 fig.set_size_inches(12*cm, 7*cm)
 plt.savefig('../Abbildungen/prior_gp_nz.pgf', bbox_inches='tight')
 fig, axs = plt.subplots(1,2, layout='constrained')
-axs[0].plot([5,10,25,50,100,200], rmse_list_heteroscedastic, marker='x')
-axs[0].plot([5,10,25,50,100,200], rmse_list_homoscedastic, marker='o')
-axs[1].plot([5,10,25,50,100,200], mae_list_heteroscedastic, marker='x')
-axs[1].plot([5,10,25,50,100,200], mae_list_homoscedastic, marker='o')
+axs[0].scatter([5,10,25,50,100,200], rmse_list_heteroscedastic, marker='x')
+axs[0].scatter([5,10,25,50,100,200], rmse_list_homoscedastic, marker='o')
+axs[1].scatter([5,10,25,50,100,200], mae_list_heteroscedastic, marker='x')
+axs[1].scatter([5,10,25,50,100,200], mae_list_homoscedastic, marker='o')
 #axs[].xaxis.set_major_locator(mticker.FixedLocator([10,25,50,100,200,400]))
 #axs[0].xaxis.set_major_locator(mticker.FixedLocator([10,25,50,100,200,400]))
 axs[0].grid()

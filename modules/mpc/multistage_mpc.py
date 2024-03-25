@@ -15,6 +15,7 @@ class MultistageMPC(MPC):
         self.horizon = opt['N']
         self.sampling_frequency = opt['dt']
         self.opt = opt
+        self.nodes = None
 
     def generate_scenario(self, start_time, train=False, first_value_known=True):
         """
@@ -253,7 +254,7 @@ class MultistageMPC(MPC):
             P_upper = self.ohps.get_P_wtg(0,0,mean_init[i]+std_list[0]*np.sqrt(var_init[i]))
             P_lower = self.ohps.get_P_wtg(0,0,mean_init[i]-std_list[0]*np.sqrt(var_init[i]))
             power_uncertainty_acc += np.abs(P_upper-P_lower)*self.sampling_frequency/60
-            if power_uncertainty_acc >= dE_min:
+            if power_uncertainty_acc >= dE_min and i>1:
                 # branch
                 has_branched = True
                 parent_nodes.append([0]*len(std_list))
@@ -275,17 +276,16 @@ class MultistageMPC(MPC):
     def build_optimization_tree(self, parent_nodes, probabilities, means=None, vars=None):
         nodes = [
             [TreeNode(ohps=self.ohps, time_index=0, node_index=0, opt=self.opt, predecessor=None,
-                      wind_pred=(means[0][0], vars[0][0]), probability=probabilities[0][0])]]
+                probability=probabilities[0][0])]]
         for i in range(1, self.horizon):
             nodes_i = [TreeNode(
                 ohps=self.ohps, time_index=i, node_index=k, opt=self.opt, 
-                probability=probabilities[i][k], predecessor=nodes[i-1][k_predecessor], 
-                wind_pred = (mean, var)) 
-                for k, (k_predecessor, mean, var) in enumerate(zip(parent_nodes[i], means[i], vars[i]))]
+                probability=probabilities[i][k], predecessor=nodes[i-1][k_predecessor]) 
+                for k, k_predecessor in enumerate(parent_nodes[i])]
             nodes.append(nodes_i)
         return nodes
 
-    def get_optimization_problem(self, start_time, train=False):
+    def get_optimization_problem(self, start_time, train=False, keep_tree=False):
         if self.opt['use_simple_scenarios']:
             means, vars, parent_nodes, probabilities = self.generate_scenario_simple(start_time, train)
         else:
@@ -294,6 +294,13 @@ class MultistageMPC(MPC):
             means, vars, parent_nodes, probabilities = self.generate_scenario(start_time, train)
         self.means = means
         self.vars = vars
+        # test if structure of tree has changed to not have to build the tree again
+        if self.nodes is not None:
+            can_keep_tree =  np.all([len(means[i])==len(self.nodes[i]) for i in range(self.horizon)]) 
+        else:
+            can_keep_tree = False
+        if keep_tree and can_keep_tree:
+            return
         self.parent_nodes = parent_nodes
         nodes = self.build_optimization_tree(parent_nodes, probabilities, means, vars)
         self.nodes = nodes
@@ -384,14 +391,15 @@ class MultistageMPC(MPC):
             u_init_list.append(u_init)
         return ca.vertcat(*v_init)
                 
-    def get_parameters(self, x0, P_gtg_last, P_demand):
+    def get_parameters(self, x0, P_gtg_last, P_demand, wind_predictions):
         p = []
         for i, nodes_i in enumerate(self.nodes):
-            for node in nodes_i:
+            for k, node in enumerate(nodes_i):
                 p_i_k = []
                 if i == 0:
                     p_i_k.append(x0)
                     p_i_k.append(P_gtg_last)
+                p_i_k.append(wind_predictions[i][k])
                 p_i_k.append(P_demand[i])
                 p_i_k = node.get_p_fun(*p_i_k)
                 p.append(p_i_k)

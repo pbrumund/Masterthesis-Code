@@ -20,7 +20,7 @@ epsilon = 0.1
 std_factor = norm.ppf(1-epsilon)
 std_list = (-std_factor, 0, std_factor)
 
-mpc_opt = get_mpc_opt(N=30, std_list_multistage=std_list, use_simple_scenarios=True, dE_min=100, include_last_measurement=True, use_soft_constraints_state=False)#,  t_start=datetime.datetime(2022,12,6), t_end=datetime.datetime(2022,12,8))
+mpc_opt = get_mpc_opt(N=36, std_list_multistage=std_list, use_simple_scenarios=True, dE_min=5000, include_last_measurement=True, use_soft_constraints_state=False)#,  t_start=datetime.datetime(2022,12,6), t_end=datetime.datetime(2022,12,8))
 gp_opt = get_gp_opt(dt_pred = mpc_opt['dt'], steps_forward = mpc_opt['N'], verbose=False)
 gp = TimeseriesModel(gp_opt)
 ohps.setup_integrator(dt=60*mpc_opt['dt'])
@@ -97,9 +97,9 @@ for k, t in enumerate(times, start=start):
     # wind_speeds_gp, var_gp = gp.predict_trajectory(t, multistage_mpc.horizon, train)
     # std_gp = np.sqrt(var_gp)
     
-    multistage_mpc.get_optimization_problem(t, train)
-
-    p = multistage_mpc.get_parameters(x_k, P_gtg_last, P_demand)
+    multistage_mpc.get_optimization_problem(t, train, keep_tree=True)
+    wind_scenarios = multistage_mpc.means
+    p = multistage_mpc.get_parameters(x_k, P_gtg_last, P_demand, wind_scenarios)
 
     if v_init_next is None:
         v_init = multistage_mpc.get_initial_guess(v_last, P_wtg, x_k, P_demand)

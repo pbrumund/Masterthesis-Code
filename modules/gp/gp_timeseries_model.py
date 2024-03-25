@@ -508,6 +508,7 @@ class TimeseriesModel(WindPredictionGP):
         pseudo_outputs = pseudo_measurements - np.array(nwp_pseudo_inputs)
         pseudo_outputs = torch.from_numpy(pseudo_outputs)
         pseudo_indices = torch.from_numpy(pseudo_indices).reshape((-1,1))
+        _, self.timeseries_likelihood = self.get_timeseries_gp(prediction_time)
         x_train_pseudo = torch.cat((self.X_train_timeseries, pseudo_indices))
         y_train_pseudo = torch.cat((self.y_train_timeseries, pseudo_outputs))
         get_x_fun = lambda x: self._get_in(self.t_last_train, x)

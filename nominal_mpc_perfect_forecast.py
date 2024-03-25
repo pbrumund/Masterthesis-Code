@@ -13,7 +13,7 @@ from modules.mpc_scoring import DataSaving
 plot = False
 ohps = OHPS()
 
-mpc_opt = get_mpc_opt(N=30, use_soft_constraints_state=False)
+mpc_opt = get_mpc_opt(N=36, use_soft_constraints_state=False)
 t_start = mpc_opt['t_start_sim']
 t_end = mpc_opt['t_end_sim']
 # mpc_opt['param']['k_gtg_P'] = 10

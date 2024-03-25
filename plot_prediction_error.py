@@ -541,7 +541,7 @@ if __name__ == "__main__":
     plt.show() """
 
     #Plot error variance over CIN
-    start_time = datetime.datetime(2020,1,1)
+    """ start_time = datetime.datetime(2020,1,1)
     end_time = datetime.datetime(2022,12,31)
     weather_data = fi.load_weather_data(start_time, end_time)
 
@@ -583,7 +583,7 @@ if __name__ == "__main__":
     plt.plot(cin_range_mean, mean_errors_in_range)
     plt.xlabel('CIN')
     plt.ylabel('Error Variance')
-    plt.show()
+    plt.show() """
 
     # plot error over air pressure
 

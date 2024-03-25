@@ -20,9 +20,10 @@ epsilon = 0.1
 std_factor = norm.ppf(1-epsilon)
 std_list = (-std_factor, 0, std_factor)
 
-mpc_opt = get_mpc_opt(N=30, std_list_multistage=std_list, use_simple_scenarios=False, dE_min=5000, use_soft_constraints_state=False, include_last_measurement=True)
+mpc_opt = get_mpc_opt(N=36, std_list_multistage=std_list, use_simple_scenarios=False, dE_min=5000, use_soft_constraints_state=False, include_last_measurement=True)
 gp_opt = get_gp_opt(dt_pred = mpc_opt['dt'], steps_forward = mpc_opt['N'], verbose=False)
 gp = TimeseriesModel(gp_opt)
+gp.predictions_mean = None
 ohps.setup_integrator(dt=60*mpc_opt['dt'])
 
 multistage_mpc = MultistageMPC(ohps, gp, mpc_opt)
@@ -96,8 +97,9 @@ for k, t in enumerate(times, start=start):
     # std_gp = np.sqrt(var_gp)
     
     multistage_mpc.get_optimization_problem(t, train)
-
-    p = multistage_mpc.get_parameters(x_k, P_gtg_last, P_demand)
+    wind_scenarios = multistage_mpc.means
+    p = multistage_mpc.get_parameters(x_k, P_gtg_last, P_demand, wind_scenarios)
+    #p = multistage_mpc.get_parameters(x_k, P_gtg_last, P_demand)
 
     if v_init_next is None:
         v_init = multistage_mpc.get_initial_guess(v_last, P_wtg, x_k, P_demand)

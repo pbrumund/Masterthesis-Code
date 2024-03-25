@@ -12,9 +12,9 @@ from modules.mpc_scoring import DataSaving
 
 
 plot = False
-ohps = OHPS()
+ohps = OHPS(N_p=8000)
 
-mpc_opt = get_mpc_opt(N=30)
+mpc_opt = get_mpc_opt(N=36)
 t_start = datetime.datetime(2022,1,1)
 t_end = datetime.datetime(2022,12,31)
 mpc_opt['t_start_sim'] = t_start
@@ -77,7 +77,7 @@ if plot:
     fig_E_tot, ax_E_tot = plt.subplots(2, num='Nominal MPC with perfect forecast, total energy output', sharex=True)
 # save trajectories to file
 dims = {'Power output': 4, 'Power demand': 1, 'SOC': 1, 'Inputs': 2}
-data_saver = DataSaving('nominal_mpc_perfect_forecast_shifting_large_battery', mpc_opt, gp_opt, dims)
+data_saver = DataSaving('nominal_mpc_perfect_forecast_shifting_50MWh', mpc_opt, gp_opt, dims)
 
 # load trajectories if possible
 start = 0
@@ -105,6 +105,7 @@ if values is not None:
     E_target_lt = np.array([scheduler.get_E_target_lt(t)/1000 for t in times_plot if t <= t_last])
     dE = scheduler.get_E_target_lt(t_last)-E_tot # difference between generated energy and long-time average
     dE_sched = E_sched-6*E_tot   # difference between generated and scheduled energy
+    E_shifted = np.sum(P_traj[:,3]-P_traj[:,4])/6
 
 for k, t in enumerate(times, start=start):
     # get parameters: predicted wind speed, power demand, initial state
@@ -120,7 +121,7 @@ for k, t in enumerate(times, start=start):
     E_sched += P_demand[0]
     E_target = ca.sum1(P_demand) + dE_sched # total scheduled demand plus compensation for previously not satisfied demand
     # P_demand = 8000*ca.DM.ones(nominal_mpc.horizon)
-    p = nominal_mpc.get_p_fun(x_k, P_gtg_last, P_out_last, wind_speeds, 16000, P_demand, E_shifted, 10000)
+    p = nominal_mpc.get_p_fun(x_k, P_gtg_last, P_out_last, wind_speeds, 16000, P_demand, E_shifted, 50000)
 
     # get initial guess
     v_init = nominal_mpc.get_initial_guess(p, v_last)

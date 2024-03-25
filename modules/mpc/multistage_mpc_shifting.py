@@ -15,6 +15,7 @@ class MultistageMPCLoadShifting(MPC):
         self.horizon = opt['N']
         self.sampling_frequency = opt['dt']
         self.opt = opt
+        self.nodes = None
 
     def generate_scenario(self, start_time, train=False, first_value_known=True):
         """
@@ -252,7 +253,7 @@ class MultistageMPCLoadShifting(MPC):
             P_upper = self.ohps.get_P_wtg(0,0,mean_init[i]+std_list[0]*np.sqrt(var_init[i]))
             P_lower = self.ohps.get_P_wtg(0,0,mean_init[i]-std_list[0]*np.sqrt(var_init[i]))
             power_uncertainty_acc += np.abs(P_upper-P_lower)*self.sampling_frequency/60
-            if power_uncertainty_acc >= dE_min:
+            if power_uncertainty_acc >= dE_min and i>1:
                 # branch
                 has_branched = True
                 parent_nodes.append([0]*len(std_list))
@@ -270,29 +271,102 @@ class MultistageMPCLoadShifting(MPC):
             vars_list.append([var_init[i]])
             probabilities.append([1])
         return means_list, vars_list, parent_nodes, probabilities
+    
+    def generate_scenario_shifting(self, start_time, train=False):
+        std_list = self.opt['std_list_multistage'] # number of standard deviations for scenario generation
+        norm_factor = sum(norm.pdf(x) for x in std_list) # to keep sum of probabilities at 1
+        dE_min = self.opt['dE_min'] # minimum wind power difference at +-1 std for branching
+        include_last_measurement = self.opt.get('include_last_measurement')
+        mean_init, var_init = self.gp.predict_trajectory(start_time, self.horizon, train, include_last_measurement=include_last_measurement)
 
-    def build_optimization_tree(self, parent_nodes, probabilities, means=None, vars=None):
+        means_list = [[mean_init[0]]]
+        means_pred = [[mean_init[0]]] # means of path to node, first one not used
+        vars_list = [[var_init[0]]] # is not used
+
+        probabilities = [[1]]
+        parent_nodes = [[None]] # keep track of parents for tree construction
+
+        has_branched = False
+
+        power_uncertainty_acc = 0
+        for i in range(1, self.horizon):
+            if has_branched:
+                parent_nodes.append(list(np.arange(len(std_list))))
+                means_list.append(
+                    [mean_init[i]+x*np.sqrt(var_init[i]) for x in std_list]
+                )
+                means_pred.append(
+                    [mean_init[i-1]+x*np.sqrt(var_init[i-1]) for x in std_list]
+                )
+                vars_list.append([var_init[i]]*len(std_list))
+                probabilities.append(
+                    [norm.pdf(x)/norm_factor for x in std_list]
+                )
+                continue
+            P_upper = self.ohps.get_P_wtg(0,0,mean_init[i]+std_list[0]*np.sqrt(var_init[i]))
+            P_lower = self.ohps.get_P_wtg(0,0,mean_init[i]-std_list[0]*np.sqrt(var_init[i]))
+            if power_uncertainty_acc >= dE_min and i>1:
+                # branch
+                has_branched = True
+                parent_nodes.append([0]*len(std_list))
+                means_list.append(
+                    [mean_init[i]+x*np.sqrt(var_init[i]) for x in std_list]
+                )
+                means_pred.append(
+                    [mean_init[i-1]+x*np.sqrt(var_init[i-1]) for x in std_list]
+                )
+                vars_list.append([var_init[i]]*len(std_list))
+                probabilities.append(
+                    [norm.pdf(x)/norm_factor for x in std_list]
+                )
+                #means_list[i] = [mean_init[i-1]+x*np.sqrt(var_init[i-1]) for x in std_list]
+                continue
+            # do not branch yet
+            parent_nodes.append([0])
+            means_pred.append(means_list[-1])
+            means_list.append([mean_init[i]])
+            vars_list.append([var_init[i]])
+            probabilities.append([1])
+            power_uncertainty_acc += np.abs(P_upper-P_lower)*self.sampling_frequency/60
+        return means_list, means_pred, parent_nodes, probabilities
+
+
+    def build_optimization_tree(self, parent_nodes, probabilities, predictions_node, predictions_path, wind_speed_as_param=False):
+        if wind_speed_as_param:
+            nodes = [
+                [TreeNode(ohps=self.ohps, time_index=0, node_index=0, opt=self.opt, predecessor=None,
+                      wind_pred=None, probability=probabilities[0][0], wind_now=None)]]
+            for i in range(1, self.horizon):
+                nodes_i = [TreeNode(
+                    ohps=self.ohps, time_index=i, node_index=k, opt=self.opt, 
+                    probability=probabilities[i][k], predecessor=nodes[i-1][k_predecessor], 
+                    wind_pred = None, wind_now = None) 
+                    for k, k_predecessor in enumerate(parent_nodes[i])]
+                nodes.append(nodes_i)
+            return nodes
         nodes = [
             [TreeNode(ohps=self.ohps, time_index=0, node_index=0, opt=self.opt, predecessor=None,
-                      wind_pred=(means[0][0], vars[0][0]), probability=probabilities[0][0])]]
+                      wind_pred=predictions_path[0][0], probability=probabilities[0][0], wind_now=predictions_node[0][0])]]
         for i in range(1, self.horizon):
             nodes_i = [TreeNode(
                 ohps=self.ohps, time_index=i, node_index=k, opt=self.opt, 
                 probability=probabilities[i][k], predecessor=nodes[i-1][k_predecessor], 
-                wind_pred = (mean, var)) 
-                for k, (k_predecessor, mean, var) in enumerate(zip(parent_nodes[i], means[i], vars[i]))]
+                wind_pred = predictions_path[i][k], wind_now = predictions_node[i][k]) 
+                for k, k_predecessor in enumerate(parent_nodes[i])]
             nodes.append(nodes_i)
         return nodes
 
-    def get_optimization_problem(self, start_time, train=False):
-        if self.opt['use_simple_scenarios']:
-            means, vars, parent_nodes, probabilities = self.generate_scenario_simple(start_time, train)
-        else:
-            means, vars, parent_nodes, probabilities = self.generate_scenario_new(start_time, train)
+    def get_optimization_problem(self, start_time, train=False, keep_tree = False):
+        means, means_pred, parent_nodes, probabilities = self.generate_scenario_shifting(start_time, train)
+        if keep_tree and self.nodes is not None:
+            self.means = means
+            self.means_pred = means_pred
+            return
         self.means = means
-        self.vars = vars
+        self.means_pred = means_pred
+        # self.vars = vars
         self.parent_nodes = parent_nodes
-        nodes = self.build_optimization_tree(parent_nodes, probabilities, means, vars)
+        nodes = self.build_optimization_tree(parent_nodes, probabilities, means, means_pred, keep_tree)
         self.nodes = nodes
         # nodes is nested list with time as first index and node index as second index
         nodes_flattened = []
@@ -307,7 +381,7 @@ class MultistageMPCLoadShifting(MPC):
         v_lb = ca.vertcat(*[node.v_lb for node in nodes_flattened])
         v_ub = ca.vertcat(*[node.v_ub for node in nodes_flattened])
         self.get_u_next_fun = ca.Function('get_u_next', [v_vec], [nodes[0][0].u])
-        self.get_P_next_fun = ca.Function('get_P_next', [v_vec], [nodes[0][0].P_out])
+        #self.get_P_next_fun = ca.Function('get_P_next', [v_vec], [nodes[0][0].P_out])
         v_middle = [node.v for node in middle_nodes] # for generating initial guess
         self.get_v_middle_fun = ca.Function('get_v_middle', [v_vec], v_middle)
         g = ca.vertcat(*[node.g for node in nodes_flattened])
@@ -323,13 +397,16 @@ class MultistageMPCLoadShifting(MPC):
             'mpc', [v_init, p], 
             [_solver(x0=v_init, p=p, lbx=v_lb, ubx=v_ub, lbg=g_lb, ubg=g_ub)['x']],
             ['v_init', 'p'], ['v_opt'])
-        
+        self.g = g
+        self.g_lb = g_lb
+        self.g_ub = g_ub
+        self.g_fun = ca.Function('g', [self.v, p], [g])
         self.J_gtg = sum(node.J_gtg*node.probability for node in nodes_flattened)
         self.J_gtg_P = sum(node.J_gtg_P*node.probability for node in nodes_flattened)
         self.J_gtg_eta = sum(node.J_gtg_eta*node.probability for node in nodes_flattened)
         self.J_gtg_dP = sum(node.J_gtg_dP*node.probability for node in nodes_flattened)
         self.J_bat = sum(node.J_bat*node.probability for node in nodes_flattened)
-        self.J_s_E = sum(node.J_s_E*node.probability for node in nodes_flattened)
+        self.J_s_E = sum((node.J_s_E+node.J_s_E_path)*node.probability for node in nodes_flattened)
         self.J_s_x = sum(node.J_s_x*node.probability for node in nodes_flattened)
         self.J_u = sum(node.J_u*node.probability for node in nodes_flattened)
         self.J_fun = ca.Function('J', [v_vec, p], [J])
@@ -343,7 +420,29 @@ class MultistageMPCLoadShifting(MPC):
         self.J_s_x_fun = ca.Function('J_s_x', [v_vec, p], [self.J_s_x])
         
     def get_initial_guess(self, v_last = None, wind_power_vec = None, x0 = None, 
-                          P_demand = None):
+                          P_demand = None, v_last_all = None):
+        if v_last_all is not None:
+            # for fixed certainty horizon of 1
+            # first step with multiple nodes: 2 (third)
+            n_first = self.nodes[0][0].v.shape[0] # remove solution for first time step
+            v_last_all = v_last_all[n_first:]
+            k = 0
+            v_init = []
+            for i in range(self.horizon):
+                n_i = sum([node.v.shape[0] for node in self.nodes[i]])
+                if i == 1:
+                    v_last_i = v_last_all[k+n_i:k+2*n_i]
+                    k += 3*n_i
+                elif i == self.horizon - 2:
+                    n_i = int(n_i/3)
+                    v_last_i = ca.vertcat(v_last_all[k:k+n_i],v_last_all[k+n_i+1:k+2*n_i+1], v_last_all[k+2*n_i+2:k+3*n_i+2])
+                else:
+                    v_last_i = v_last_all[k:k+n_i]
+                    k += n_i
+                v_init.append(v_last_i)
+            v_init = ca.vertcat(*v_init)
+            if v_init.shape == self.v.shape:
+                return v_init
         if v_last is not None:
             # use last solution to generate initial guess
             v_last = list(v_last[1:])
@@ -353,6 +452,9 @@ class MultistageMPCLoadShifting(MPC):
                 for node in nodes_i:
                     if i == self.horizon-2:
                         v_init.append(v_i[:-1]) # remove s_E from originally last, now second to last node
+                    elif i == self.horizon - 1:
+                        v_i[-2] = 0
+                        v_init.append(v_i)
                     else:
                         v_init.append(v_i)
             return ca.vertcat(*v_init)
@@ -390,16 +492,22 @@ class MultistageMPCLoadShifting(MPC):
             u_init_list.append(u_init)
         return ca.vertcat(*v_init)
                 
-    def get_parameters(self, x0, P_gtg_last, P_out_last, P_min, E_shifted_last, P_demand, E_backoff=None):
+    def get_parameters(self, x0, P_gtg_last, P_out_last, P_min, E_shifted_last, P_demand, E_backoff=None, gp_predictions=None):
         p = []
+        if gp_predictions is not None:
+            wind_pred = gp_predictions[0]
+            wind_now = gp_predictions[1]
         for i, nodes_i in enumerate(self.nodes):
-            for node in nodes_i:
+            for k, node in enumerate(nodes_i):
                 p_i_k = []
                 if i == 0:
                     p_i_k.append(x0)
                     p_i_k.append(P_gtg_last)
                     p_i_k.append(P_out_last)
                     p_i_k.append(E_shifted_last)
+                if gp_predictions is not None:
+                    p_i_k.append(wind_pred[i][k])
+                    p_i_k.append(wind_now[i][k])
                 if self.opt['use_path_constraints_energy']:
                     p_i_k.append(E_backoff)
                 p_i_k.append(P_demand[i])           
@@ -411,7 +519,7 @@ class MultistageMPCLoadShifting(MPC):
 
 class TreeNode:
     def __init__(self, ohps: OHPS, time_index, node_index, opt, probability, 
-                 predecessor=None, wind_pred=None):
+                 predecessor=None, wind_pred=None, wind_now = None):
         self.ohps = ohps
         self.time_index = time_index #k
         self.node_index = node_index #j
@@ -428,7 +536,8 @@ class TreeNode:
         if self.opt['use_chance_constraints_multistage']:
             epsilon = self.opt['epsilon_chance_constraint']
             self.back_off_factor = norm.ppf(1-epsilon)
-        self.wind_pred = wind_pred
+        self.wind_now = wind_now # wind speed for path from current node, for terminal constraint
+        self.wind_pred = wind_pred # wind speed associated with path to current node
         self.probability = probability
         self.setup()
 
@@ -467,9 +576,9 @@ class TreeNode:
         self.s_x = ca.MX.sym(f's_x_{self.time_index}_{self.node_index}')
         self.s_x_lb = 0
         self.s_x_ub = ca.inf
-        self.v = ca.vertcat(self.u, self.x, self.s_x, self.s_E_path, self.E_shifted, self.s_E)
-        self.v_lb = ca.vertcat(self.u_lb, self.x_lb, self.s_E_path_lb, self.s_x_lb, self.s_E_lb, self.E_shifted_lb)
-        self.v_ub = ca.vertcat(self.u_ub, self.x_ub, self.s_E_path_ub, self.s_x_ub, self.s_E_ub, self.E_shifted_ub)
+        self.v = ca.vertcat(self.u, self.x, self.s_E_path, self.s_x, self.E_shifted, self.s_E)
+        self.v_lb = ca.vertcat(self.u_lb, self.x_lb, self.s_E_path_lb, self.s_x_lb, self.E_shifted_lb, self.s_E_lb)
+        self.v_ub = ca.vertcat(self.u_ub, self.x_ub, self.s_E_path_ub, self.s_x_ub, self.E_shifted_ub, self.s_E_ub)
         self.get_v_fun = ca.Function(f'get_v_{self.time_index}_{self.node_index}', 
                                      [self.x, self.u, self.s_x, self.s_E_path, self.s_E, self.E_shifted], [self.v])
         self.get_u_fun = ca.Function(f'get_u_{self.time_index}_{self.node_index}', 
@@ -494,15 +603,21 @@ class TreeNode:
             self.param.append(self.P_out_last)
             self.E_shifted_0 = ca.MX.sym('E_shifted_0')
             self.param.append(self.E_shifted_0)
+        if self.wind_pred is None:
+            self.wind_pred = ca.MX.sym('wind_pred')
+            self.param.append(self.wind_pred)
+            self.wind_now = ca.MX.sym('wind_now')
+            self.param.append(self.wind_now)
+
         # if self.is_leaf_node:
         #     self.E_target = ca.MX.sym('E_target')
         #     self.param.append(self.E_target)
-        if self.wind_pred is None:
-            self.wind_speed = ca.MX.sym(f'wind_speed_{self.time_index}_{self.node_index}')
-            self.param.append(self.wind_speed)
-            if self.opt['use_chance_constraints_multistage']:
-                self.wind_std = ca.MX.sym(f'std_{self.time_index}_{self.node_index}')
-                self.param.append(self.wind_std)
+        # if self.wind_pred is None:
+        #     self.wind_speed = ca.MX.sym(f'wind_speed_{self.time_index}_{self.node_index}')
+        #     self.param.append(self.wind_speed)
+        #     if self.opt['use_chance_constraints_multistage']:
+        #         self.wind_std = ca.MX.sym(f'std_{self.time_index}_{self.node_index}')
+        #         self.param.append(self.wind_std)
         if self.opt['use_path_constraints_energy']:
             self.E_backoff = ca.MX.sym('E_backoff')
             self.param.append(self.E_backoff)
@@ -529,46 +644,55 @@ class TreeNode:
         self.constraints.append(state_constraint)
         g_lb.append(state_constraint_lb)
         g_ub.append(state_constraint_ub)
-        # Use chance constraints if wanted
-        if self.wind_pred is not None:
-            wind_speed = self.wind_pred[0] # use numerical value
-        else:
-            wind_speed = self.wind_speed # use symbolic
-        if self.opt['use_chance_constraints_multistage']:
-            if self.wind_pred is not None:
-                wind_std = self.wind_pred[1]
-            else:
-                wind_std = self.wind_std
-            wind_speed = wind_speed - self.back_off_factor*wind_std
-        P_gtg = self.ohps.get_P_gtg(self.x, self.u, wind_speed)
-        P_bat = self.ohps.get_P_bat(self.x, self.u, wind_speed)
-        P_wtg = self.ohps.get_P_wtg(self.x, self.u, wind_speed)
-        # P_out >= P_min
-        g_demand = self.P_min - P_gtg - P_bat - P_wtg
-        g_demand_lb = -ca.inf
-        g_demand_ub = 0
-        self.constraints.append(g_demand)
-        g_lb.append(g_demand_lb)
-        g_ub.append(g_demand_ub)
+        P_gtg = self.ohps.get_P_gtg(self.x, self.u, self.wind_now)
+        P_bat = self.ohps.get_P_bat(self.x, self.u, self.wind_now)
+        P_wtg = self.ohps.get_P_wtg(self.x, self.u, self.wind_now)
         self.P_out = P_gtg + P_wtg + P_bat
         # State constraints for shifted power
         if self.is_root_node:
-            E_shifted_now = self.E_shifted_0
+            g_E_shifted = self.E_shifted - self.E_shifted_0#E_shifted_now = self.E_shifted_0
         else:
-            E_shifted_now = self.predecessor.E_shifted
-        g_E_shifted = E_shifted_now + (self.P_out-self.P_demand)*self.opt['dt']/60 - self.E_shifted
+            P_wtg_last = self.ohps.get_P_wtg(self.predecessor.x, self.predecessor.u, self.wind_pred)
+            P_gtg_last = self.ohps.get_P_gtg(self.predecessor.x, self.predecessor.u, self.wind_pred)
+            P_bat_last = self.ohps.get_P_bat(self.predecessor.x, self.predecessor.u, self.wind_pred)
+            P_out_last = P_wtg_last + P_gtg_last + P_bat_last
+            g_demand = self.P_min - P_out_last
+            g_demand_lb = -ca.inf
+            g_demand_ub = 0
+            self.constraints.append(g_demand)
+            g_lb.append(g_demand_lb)
+            g_ub.append(g_demand_ub)
+            g_E_shifted = (self.predecessor.E_shifted + (P_out_last - self.predecessor.P_demand)
+                           *self.opt['dt']/60 - self.E_shifted)
+        # g_E_shifted = E_shifted_now + (self.P_out-self.P_demand)*self.opt['dt']/60 - self.E_shifted
         g_E_shifted_lb = 0
         g_E_shifted_ub = 0
         self.constraints.append(g_E_shifted)
         g_lb.append(g_E_shifted_lb)
         g_ub.append(g_E_shifted_ub)
-        if self.is_root_node:
-            self.P_sum = P_gtg + P_wtg + P_bat
-        else:
-            self.P_sum = self.predecessor.P_sum + P_gtg + P_wtg + P_bat
+        # if self.is_root_node:
+        #     self.P_sum = P_gtg + P_wtg + P_bat
+        # else:
+        #     self.P_sum = self.predecessor.P_sum + P_gtg + P_wtg + P_bat
         if self.is_leaf_node:
+            # State constraints on x_N
+            x_next = self.ohps.get_next_state(self.x, self.u)
+            x_next_lb = self.ohps.lbx
+            x_next_ub = self.ohps.ubx
+            self.constraints.append(x_next)
+            g_lb.append(x_next_lb)
+            g_ub.append(x_next_ub)
             # sum(P_out) + s_E >= E_target
-            g_E = -self.E_shifted
+            P_out = (self.ohps.get_P_wtg(self.x, self.u, self.wind_now) 
+                     + self.ohps.get_P_gtg(self.x, self.u, self.wind_now)
+                     + self.ohps.get_P_bat(self.x, self.u, self.wind_now))
+            g_demand = self.P_min - P_out
+            g_demand_lb = -ca.inf
+            g_demand_ub = 0
+            self.constraints.append(g_demand)
+            g_lb.append(g_demand_lb)
+            g_ub.append(g_demand_ub)
+            g_E = -(self.E_shifted + P_out - self.P_demand) - self.s_E
             g_E_lb = -ca.inf
             g_E_ub = 0
             self.constraints.append(g_E)
@@ -629,7 +753,7 @@ class TreeNode:
         self.J_bat = -self.opt['param']['k_bat']*SOC
         self.J_u = self.u.T@self.opt['param']['R_input']@self.u
         if self.is_leaf_node:
-            self.J_s_E = self.opt['param']['r_s_E']*(self.s_E)**2
+            self.J_s_E = self.opt['param']['r_s_E']*(self.s_E)**2*1/(self.time_index+1)**2
         else:
             self.J_s_E = 0
         if self.opt['use_soft_constraints_state']:
@@ -637,9 +761,10 @@ class TreeNode:
         else:
             self.J_s_x = 0
         if self.opt['use_path_constraints_energy']:
-            self.J_s_E_path = self.opt['param']['r_s_E']*(self.s_E_path)**2
-        
-        self.J = (self.J_gtg+self.J_bat+self.J_u+self.J_dP+self.J_s_E+self.J_s_x)*self.probability
+            self.J_s_E_path = self.opt['param']['r_s_E']*(self.s_E_path)**2*1/(self.time_index+1)**2
+        else:
+            self.J_s_E_path = 0
+        self.J = (self.J_gtg+self.J_bat+self.J_u+self.J_dP+self.J_s_E+self.J_s_x+self.J_s_E_path)*self.probability
         
         
 

@@ -20,7 +20,7 @@ epsilon = 0.1
 std_factor = norm.ppf(1-epsilon)
 std_list = (-std_factor, 0, std_factor)
 
-mpc_opt = get_mpc_opt(N=30, std_list_multistage=std_list, use_simple_scenarios=False, dE_min=5000, t_start_sim=datetime.datetime(2022,1,1), use_soft_constraints_state=False, include_last_measurement=True)#,  t_start=datetime.datetime(2022,12,6), t_end=datetime.datetime(2022,12,8))
+mpc_opt = get_mpc_opt(N=30, std_list_multistage=std_list, use_simple_scenarios=False, dE_min=100, t_start_sim=datetime.datetime(2022,1,1), use_soft_constraints_state=False, include_last_measurement=True)#,  t_start=datetime.datetime(2022,12,6), t_end=datetime.datetime(2022,12,8))
 mpc_opt['param']['k_dP'] = 10
 mpc_opt['param']['r_s_E'] = 100
 mpc_opt['param']['k_bat'] = 0

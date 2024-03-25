@@ -17,11 +17,11 @@ N_p = 8000
 ohps = OHPS(N_p=N_p)
 plot = False
 
-mpc_opt = get_mpc_opt(N=30, t_start_sim=datetime.datetime(2022,1,1), use_soft_constraints_state=False)
+mpc_opt = get_mpc_opt(N=36, t_start_sim=datetime.datetime(2022,1,1), use_soft_constraints_state=False)
 mpc_opt['param']['k_dP'] = 10
 mpc_opt['param']['r_s_E'] = 100
 mpc_opt['param']['k_bat'] = 0
-mpc_opt['use_path_constraints_energy'] = False
+mpc_opt['use_path_constraints_energy'] = True
 mpc_opt['N_p'] = N_p
 nominal_mpc = NominalMPCLoadShifting(ohps, mpc_opt)
 nominal_mpc.get_optimization_problem()
@@ -69,7 +69,7 @@ if plot:
     fig_E_tot, ax_E_tot = plt.subplots(2, num='Nominal MPC with GP forecast, total energy output', sharex=True)
 # save trajectories to file
 dims = {'Power output': 4, 'Power demand': 1, 'SOC': 1, 'Inputs': 2}
-data_saver = DataSaving('nominal_mpc_gp_forecast_shifting_fixed_demand', mpc_opt, gp_opt, dims)
+data_saver = DataSaving('nominal_mpc_gp_forecast_shifting_50MWh', mpc_opt, gp_opt, dims)
 
 # load trajectories if possible
 start = 0
@@ -97,6 +97,7 @@ if values is not None:
     E_target_lt = np.array([scheduler.get_E_target_lt(t)/1000 for t in times_plot if t <= t_last])
     dE = scheduler.get_E_target_lt(t_last)-E_tot # difference between generated energy and long-time average
     dE_sched = E_sched-6*E_tot   # difference between generated and scheduled energy
+    E_shifted = np.sum(P_traj[:,3]-P_traj[:,4])/6
 
 for k, t in enumerate(times, start=start):
     # get parameters: predicted wind speed, power demand, initial state
@@ -113,7 +114,7 @@ for k, t in enumerate(times, start=start):
         P_demand = ca.vertcat(*P_wtg) + 0.8*ohps.gtg.bounds['ubu']
     E_sched += P_demand[0]
     E_target = ca.sum1(P_demand) + dE_sched # total scheduled demand plus compensation for previously not satisfied demand
-    p = nominal_mpc.get_p_fun(x_k, P_gtg_last, P_out_last, wind_speeds_gp, 16000, P_demand, E_shifted, 10000)
+    p = nominal_mpc.get_p_fun(x_k, P_gtg_last, P_out_last, wind_speeds_gp, 16000, P_demand, E_shifted, 50000)
 
     # get initial guess
     v_init = nominal_mpc.get_initial_guess(p, v_last)

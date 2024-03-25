@@ -12,8 +12,7 @@ from modules.plotting import TimeseriesPlot
 from modules.mpc_scoring import DataSaving
 
 plot = False
-plot_predictions = False
-plot_predictions = False
+plot_predictions = True
 plt.ion()
 ohps = OHPS(N_p=8000)
 
@@ -21,7 +20,7 @@ epsilon = 0.1
 std_factor = norm.ppf(1-epsilon)
 std_list = (-std_factor, 0, std_factor)
 
-mpc_opt = get_mpc_opt(N=30, std_list_multistage=std_list, use_simple_scenarios=True, dE_min=1000, t_start_sim=datetime.datetime(2022,1,1), use_soft_constraints_state=False, include_last_measurement=True)#,  t_start=datetime.datetime(2022,12,6), t_end=datetime.datetime(2022,12,8))
+mpc_opt = get_mpc_opt(N=36, std_list_multistage=std_list, use_simple_scenarios=True, dE_min=0, t_start_sim=datetime.datetime(2022,1,1), use_soft_constraints_state=False, include_last_measurement=True)#,  t_start=datetime.datetime(2022,12,6), t_end=datetime.datetime(2022,12,8))
 mpc_opt['param']['k_dP'] = 10
 mpc_opt['param']['r_s_E'] = 100
 mpc_opt['param']['k_bat'] = 0
@@ -49,7 +48,8 @@ data_handler = DataHandler(datetime.datetime(2020,1,1), datetime.datetime(2022,1
 llc = LowLevelController(ohps, data_handler, mpc_opt)
 
 x_k = ohps.x0
-v_last = None
+v_last = None # middle trajectory
+v_last_all = None # all trajectories, fror fixed horizon
 v_init_next = None
 P_demand_last = None
 P_out_last = 40000
@@ -73,10 +73,10 @@ if plot:
                                 title = 'Multi-stage MPC, control inputs')
     if plot_predictions:
         fig_pred, ax_pred = plt.subplots(2, sharex=True, num='Multi-stage MPC, wind predictions')
-        fig_E_tot, ax_E_tot = plt.subplots(2, sharex=True, num='Multi-stage MPC, total Energy output')
+    fig_E_tot, ax_E_tot = plt.subplots(2, sharex=True, num='Multi-stage MPC, total Energy output')
 # save trajectories to file
 dims = {'Power output': 4, 'Power demand': 1, 'SOC': 1, 'Inputs': 2}
-data_saver = DataSaving('multi-stage_mpc_shifting_fixed_demand', mpc_opt, gp_opt, dims)
+data_saver = DataSaving('multi-stage_mpc_shifting_50MWh', mpc_opt, gp_opt, dims)
 
 # load trajectories if possible
 start = 0
@@ -104,7 +104,7 @@ if values is not None:
     E_target_lt = np.array([scheduler.get_E_target_lt(t)/1000 for t in times_plot if t <= t_last])
     dE = scheduler.get_E_target_lt(t_last)-E_tot # difference between generated energy and long-time average
     dE_sched = E_sched-6*E_tot   # difference between generated and scheduled energy
-
+    E_shifted = np.sum(P_traj[:,3]-P_traj[:,4])/6
 
 for k, t in enumerate(times, start=start):
     # get parameters: predicted wind speed, power demand, initial state
@@ -123,12 +123,15 @@ for k, t in enumerate(times, start=start):
     # wind_speeds_gp, var_gp = gp.predict_trajectory(t, multistage_mpc.horizon, train)
     # std_gp = np.sqrt(var_gp)
     
-    multistage_mpc.get_optimization_problem(t, train)
-
-    p = multistage_mpc.get_parameters(x_k, P_gtg_last, P_out_last, P_min, E_shifted, P_demand, 10000)
+    multistage_mpc.get_optimization_problem(t, train, keep_tree=True)
+    means_pred = multistage_mpc.means_pred
+    means_now = multistage_mpc.means
+    gp_predictions = [means_pred, means_now]
+    # E_shifted = np.sum(P_traj[:,3]-P_traj[:,4])
+    p = multistage_mpc.get_parameters(x_k, P_gtg_last, P_out_last, P_min, E_shifted, P_demand, 50000, gp_predictions=gp_predictions)
 
     if v_init_next is None:
-        v_init = multistage_mpc.get_initial_guess(v_last, P_wtg, x_k, P_demand)
+        v_init = multistage_mpc.get_initial_guess(v_last, P_wtg, x_k, P_demand, v_last_all)
         # v_init = multistage_mpc.get_initial_guess(None, None, x_k, P_demand)
 
     v_opt = multistage_mpc.solver(v_init, p)
@@ -144,7 +147,7 @@ for k, t in enumerate(times, start=start):
     print(f'Control variables: {multistage_mpc.J_u_fun(v_opt, p)}')
 
     u_k = multistage_mpc.get_u_next_fun(v_opt)
-    P_out = multistage_mpc.get_P_next_fun(v_opt)
+    #P_out = multistage_mpc.get_P_next_fun(v_opt)
     # s_P_k = multistage_mpc.get_s_P_next_fun(v_opt)
     # Simulate with low level controller adding uncertainty to battery
     # i_opt, P_gtg_opt, x_next = llc.simulate(t, x_k, u_k, 0, P_out)
@@ -190,7 +193,7 @@ for k, t in enumerate(times, start=start):
             ax_pred[1].plot(times_plot_power, means_P, color='tab:blue', label='Scenarios')
             meas = np.array([data_handler.get_measurement(t, i) for i in range(multistage_mpc.horizon)])
             P_meas = np.array([ohps.get_P_wtg(0,0,w) for w in meas]).reshape(-1)
-            gp_mean, gp_var = gp.predict_trajectory(t, multistage_mpc.horizon)
+            gp_mean, gp_var = gp.predict_trajectory(t, multistage_mpc.horizon, include_last_measurement=True)
             P_mean = np.array([ohps.get_P_wtg(0,0,w) for w in gp_mean]).reshape(-1)
             P_lower = np.array([ohps.get_P_wtg(0,0,w-std_factor*np.sqrt(v)) for w, v in zip(gp_mean, gp_var)]).reshape(-1)
             P_upper = np.array([ohps.get_P_wtg(0,0,w+std_factor*np.sqrt(v)) for w, v in zip(gp_mean, gp_var)]).reshape(-1)
@@ -205,16 +208,16 @@ for k, t in enumerate(times, start=start):
             ax_pred[1].plot(times_plot_power, np.array(wind_power_nwp), color='tab:red', label='NWP')
             ax_pred[0].set_ylabel('Wind speed (m/s)')
             ax_pred[1].set_ylabel('Wind power (kW)')
-            ax_E_tot[0].clear()
-            ax_E_tot[1].clear()
-            E_target_lt = np.append(E_target_lt, scheduler.get_E_target_lt(t)/1000)
-            ax_E_tot[0].plot(times_plot[:k+1], ca.cumsum(P_traj[:k+1,-2]/6000))
-            ax_E_tot[0].plot(times_plot[:k+1], E_target_lt.reshape(-1), '--', color='black')
-            ax_E_tot[0].set_xlabel('Time')
-            ax_E_tot[0].set_ylabel('Generated energy (MWh)')
-            ax_E_tot[1].plot(times_plot[:k+1], ca.cumsum(P_traj[:k+1,-2]/6000)-ca.cumsum(P_traj[:k+1,-1]/6000))
-            ax_E_tot[0].set_xlabel('Time')
-            ax_E_tot[1].set_ylabel('Shifted Energy demand (MWh)')
+        ax_E_tot[0].clear()
+        ax_E_tot[1].clear()
+        E_target_lt = np.append(E_target_lt, scheduler.get_E_target_lt(t)/1000)
+        ax_E_tot[0].plot(times_plot[:k+1], ca.cumsum(P_traj[:k+1,-2]/6000))
+        # ax_E_tot[0].plot(times_plot[:k+1], E_target_lt.reshape(-1), '--', color='black')
+        ax_E_tot[0].set_xlabel('Time')
+        ax_E_tot[0].set_ylabel('Generated energy (MWh)')
+        ax_E_tot[1].plot(times_plot[:k+1], ca.cumsum(P_traj[:k+1,-2]/6000)-ca.cumsum(P_traj[:k+1,-1]/6000))
+        ax_E_tot[0].set_xlabel('Time')
+        ax_E_tot[1].set_ylabel('Shifted Energy demand (MWh)')
     # Print out current SOC and power outputs
     print(f'time: {t.strftime("%d.%m.%Y %H:%M")}: Battery SOC: {SOC_traj[k]}')
     print(f'Gas turbine power output: {P_gtg}, Battery power output: {P_bat}, '
@@ -232,6 +235,7 @@ for k, t in enumerate(times, start=start):
     # save last solution for next iteration
     P_demand_last = P_demand
     v_last = multistage_mpc.get_v_middle_fun(v_opt)
+    v_last_all = v_opt
     # v_init_next = multistage_mpc.get_initial_guess(v_last, P_wtg, x_k, P_demand)
     P_out_last = P_total
     dE = scheduler.get_E_target_lt(t) - E_tot # difference between generated energy and long-time average

@@ -17,7 +17,7 @@ plot = False
 plot_predictions = False
 ohps = OHPS()
 
-mpc_opt = get_mpc_opt(N=30, use_soft_constraints_state=False)
+mpc_opt = get_mpc_opt(N=36, use_soft_constraints_state=False)
 nominal_mpc = NominalMPC(ohps, mpc_opt)
 nominal_mpc.get_optimization_problem()
 
