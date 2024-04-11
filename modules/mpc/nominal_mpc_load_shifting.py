@@ -78,7 +78,7 @@ class NominalMPCLoadShifting(NominalMPC):
                                      ['x0', 'P_gtg_last', 'P_out_last', 'wind_speeds', 'E_target', 'P_min', 'E_target_path', 'E_backoff'], ['p'])
         return p
 
-    def stage_cost(self, state, input, P_gtg_last, P_out, P_out_last, s_x = None, s_E = None):
+    def stage_cost(self, state, input, P_gtg_last, P_out, P_out_last, E_shifted, s_x = None, s_E = None):
         # P_gtg_last = None
         x_gtg = self.ohps.get_x_gtg(state)
         u_gtg = self.ohps.get_u_gtg(input)
@@ -97,6 +97,11 @@ class NominalMPCLoadShifting(NominalMPC):
         SOC = self.ohps.battery.get_SOC_fun(x_bat, u_bat)
         J_bat = -self.param['k_bat']*SOC
         J_u = input.T@self.param['R_input']@input
+        k_E_shifted = self.param.get('k_E_shifted')
+        if k_E_shifted is not None:
+            J_E_shifted = k_E_shifted*(E_shifted/1000)**2
+        else:
+            J_E_shifted = 0
         if self.opt['use_soft_constraints_state']:
             J_s_x = self.param['r_s_x']*s_x
         else:
@@ -121,13 +126,16 @@ class NominalMPCLoadShifting(NominalMPC):
         self.J_bat_i = J_bat
         self.J_u_i = J_u
         self.J_s_x_i = J_s_x
-        return J_gtg + J_bat + J_u + J_dP + J_s_x + J_s_E
+        self.J_s_E_i = J_s_E
+        self.J_E_i = J_E_shifted
+        return J_gtg + J_bat + J_u + J_dP + J_s_x + J_s_E + J_E_shifted
     
     def cost_function(self, v, p):
         """Return the cost function depending on the optimization variable and the parameters"""
         # get states and inputs from optimization variables
         X_mat = self.get_x_from_v_fun(v)
         U_mat = self.get_u_from_v_fun(v)
+        E_shifted = self.get_E_shifted_from_v_fun(v)
         s_x = self.get_s_x_from_v_fun(v)
         s_E_path = self.get_s_E_path_from_v_fun(v)
         # get initial state from parameters
@@ -136,7 +144,7 @@ class NominalMPCLoadShifting(NominalMPC):
         P_out_last = self.get_P_out_last_fun(p)
         wind_speeds = self.get_wind_speed_fun(p)
         J = 0
-        self.J_gtg = self.J_gtg_P = self.J_gtg_eta = self.J_gtg_dP = self.J_bat = self.J_u = self.J_s_P = self.J_s_x = 0
+        self.J_gtg = self.J_E = self.J_gtg_P = self.J_gtg_eta = self.J_gtg_dP = self.J_bat = self.J_u = self.J_s_E = self.J_s_x = 0
         for i in range(self.horizon):
             if i == 0:
                 x_i = x0
@@ -149,7 +157,8 @@ class NominalMPCLoadShifting(NominalMPC):
             P_bat_i = self.ohps.get_P_bat(x_i, u_i, wind_speeds[i])
             P_wtg_i = self.ohps.get_P_wtg(x_i, u_i, wind_speeds[i])
             P_out_i = P_gtg_i + P_wtg_i + P_bat_i
-            J += self.stage_cost(x_i, u_i, P_gtg_last, P_out_i, P_out_last, s_x_i, s_E_i)
+            E_shifted_i = E_shifted[i]
+            J += self.stage_cost(x_i, u_i, P_gtg_last, P_out_i, P_out_last, E_shifted_i, s_x_i, s_E_i)
             # Parameter tuning
             self.J_gtg += self.J_gtg_i
             self.J_gtg_P += self.J_gtg_P_i
@@ -158,6 +167,8 @@ class NominalMPCLoadShifting(NominalMPC):
             self.J_bat += self.J_bat_i
             self.J_u += self.J_u_i
             self.J_s_x += self.J_s_x_i
+            self.J_s_E += self.J_s_E_i
+            self.J_E += self.J_s_E_i
             # J += self.param['k_gtg_dP']*ca.log(100*ca.fabs(P_gtg-P_gtg_last)/self.param['P_gtg_max']+1)
             P_gtg_last = P_gtg_i
             P_out_last = P_out_i
@@ -168,10 +179,11 @@ class NominalMPCLoadShifting(NominalMPC):
         J_bat = -self.param['k_bat_final']*SOC_bat_last
         self.J_bat += J_bat
         J += J_bat
+        # terminal constraint cost
         s_E = self.get_s_from_v_fun(v)
-        J_dE = self.param['r_s_E']*(s_E)**2
-        J += J_dE
-        self.J_s_E = J_dE
+        J_s_E = self.param['r_s_E']*(s_E)**2
+        J += J_s_E
+        self.J_s_E += J_s_E
         # Parameter tuning
         self.J_fun = ca.Function('J', [v, p], [J])
         self.J_gtg_fun = ca.Function('J_gtg', [v, p], [self.J_gtg])

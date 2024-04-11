@@ -10,7 +10,7 @@ from modules.models import OHPS
 from modules.mpc import get_mpc_opt
 from modules.mpc_scoring import DataSaving
 
-#matplotlib.use('pgf')
+matplotlib.use('pgf')
 matplotlib.rcParams.update({
     "pgf.texsystem": "pdflatex",
     'font.family': 'serif',
@@ -42,14 +42,15 @@ dl = DataSaving('nominal_mpc_gp_forecast_without_llc', mpc_opt, gp_opt, array_di
 data_nmpcgpf, times_nmpcgpf = dl.load_trajectories()
 
 """Chance constrained MPC"""
-dl = DataSaving('chance_constrained_mpc_without_llc_rerun', mpc_opt, gp_opt, array_dims)
+mpc_opt['epsilon_chance_constraint'] = 0.05
+dl = DataSaving('chance_constrained_mpc_without_llc_direct_rerun', mpc_opt, gp_opt, array_dims)
 data_ccmpc, times_ccmpc = dl.load_trajectories()
 
-"""Multi-stage MPC with simple scenario generation"""
+"""Multi-stage MPC with complex scenario generation"""
 epsilon = 0.1
 std_factor = norm.ppf(1-epsilon)
 std_list = (-std_factor, 0, std_factor)
-mpc_opt = get_mpc_opt(N=36, std_list_multistage=std_list, use_simple_scenarios=True, dE_min=0, 
+mpc_opt = get_mpc_opt(N=36, std_list_multistage=std_list, use_simple_scenarios=False, dE_min=5000, 
                       use_soft_constraints_state=False, include_last_measurement=True)
 gp_opt = get_gp_opt(dt_pred = mpc_opt['dt'], steps_forward = mpc_opt['N'], verbose = False)
 dl = DataSaving('multi-stage_mpc_without_llc', mpc_opt, gp_opt, array_dims)
@@ -64,10 +65,10 @@ data_msmpcsc, times_msmpcsc = dl.load_trajectories()
 data_list = [data_nmpcpf, data_nmpcnwpf, data_nmpcgpf, data_ccmpc, data_msmpcsc]#, data_msmpcmb]
 times_list = [times_nmpcpf, times_nmpcnwpf, times_nmpcgpf, times_ccmpc, times_msmpcsc]#, times_msmpcmb]
 
-times_start_plot = [(7,22),(5,28),(5,27),(9,30),(6,1),(10,4),(1,6),(4,6),(9,6),(2,7),(12,7),(9,12),(2,13),(1,14),(1,17),(3,17),(1,18),(11,18),(1,24),(2,25),(5,27),(3,29),(6,29),(6,24),(2,1)]
+times_start_plot = [(6,24),(7,22),(5,28),(5,27),(9,30),(6,1),(10,4),(1,6),(4,6),(9,6),(2,7),(12,7),(9,12),(2,13),(1,14),(1,17),(3,17),(1,18),(11,18),(1,24),(2,25),(5,27),(3,29),(6,29),(6,24),(2,1)]
 for t_start_i in times_start_plot:
     t_start_plot = datetime.datetime(2022,*t_start_i)
-    t_end_plot = t_start_plot + datetime.timedelta(days=1)
+    t_end_plot = t_start_plot + datetime.timedelta(days=2)
     #t_end_plot = datetime.datetime(2022,12,8)
 
     fig = plt.figure(layout='constrained')
@@ -132,7 +133,7 @@ for t_start_i in times_start_plot:
 
     cm = 1/2.54
     fig.set_size_inches(14*cm, 12*cm)
-    plt.savefig(f'../Abbildungen/mpc_comparison_{t_start_plot.strftime("%d_%m")}.pdf', bbox_inches='tight')
+    plt.savefig(f'../Abbildungen/mpc_comparison_{t_start_plot.strftime("%d_%m")}_new.pgf', bbox_inches='tight')
 
 plt.pause(1)
 pass

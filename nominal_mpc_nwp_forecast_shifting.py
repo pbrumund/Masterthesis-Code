@@ -22,6 +22,7 @@ t_start = datetime.datetime(2022,8,1)
 mpc_opt['param']['k_dP'] = 10
 mpc_opt['param']['r_s_E'] = 100
 mpc_opt['param']['k_bat'] = 0
+mpc_opt['param']['k_E_shifted'] = 1
 mpc_opt['use_path_constraints_energy'] = True
 nominal_mpc = NominalMPCLoadShifting(ohps, mpc_opt)
 nominal_mpc.get_optimization_problem()
@@ -68,7 +69,7 @@ if plot:
     fig_E_tot, ax_E_tot = plt.subplots(2, num='Nominal MPC with NWP forecast, total energy output', sharex=True)
 # save trajectories to file
 dims = {'Power output': 4, 'Power demand': 1, 'SOC': 1, 'Inputs': 2}
-data_saver = DataSaving('nominal_mpc_nwp_forecast_shifting_50MWh', mpc_opt, gp_opt, dims)
+data_saver = DataSaving('nominal_mpc_nwp_forecast_shifting', mpc_opt, gp_opt, dims)
 
 # load trajectories if possible
 start = 0

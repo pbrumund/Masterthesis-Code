@@ -254,7 +254,7 @@ class MultistageMPC(MPC):
             P_upper = self.ohps.get_P_wtg(0,0,mean_init[i]+std_list[0]*np.sqrt(var_init[i]))
             P_lower = self.ohps.get_P_wtg(0,0,mean_init[i]-std_list[0]*np.sqrt(var_init[i]))
             power_uncertainty_acc += np.abs(P_upper-P_lower)*self.sampling_frequency/60
-            if power_uncertainty_acc >= dE_min and i>1:
+            if power_uncertainty_acc >= dE_min:
                 # branch
                 has_branched = True
                 parent_nodes.append([0]*len(std_list))

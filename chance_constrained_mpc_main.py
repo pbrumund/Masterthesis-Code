@@ -17,13 +17,14 @@ plot = False
 plot_predictions = True
 ohps = OHPS()
 
-mpc_opt = get_mpc_opt(N=36, use_soft_constraints_state=False, epsilon_chance_constraint=0.1)#, t_start=datetime.datetime(2022,12,6), t_end=datetime.datetime(2022,12,8))
+mpc_opt = get_mpc_opt(N=36, use_soft_constraints_state=False, epsilon_chance_constraint=0.1,t_start_sim=datetime.datetime(2022,1,17), t_end_sim=datetime.datetime(2022,1,18))#, t_start=datetime.datetime(2022,12,6), t_end=datetime.datetime(2022,12,8))
 # mpc_opt['param']['r_s_x'] = 1e6
 chance_constrained_mpc = ChanceConstrainedMPC(ohps, mpc_opt)
 chance_constrained_mpc.get_optimization_problem()
 
 gp_opt = get_gp_opt(dt_pred = mpc_opt['dt'], steps_forward = mpc_opt['N'], verbose = False)
 gp = WindPredictionGP(gp_opt)
+gp.predictions_mean = None
 
 t_start = mpc_opt['t_start_sim']
 t_end = mpc_opt['t_end_sim']
@@ -80,7 +81,10 @@ if values is not None:
     u_traj[:n_vals,:] = inputs
     P_traj[:n_vals,:] = P
     x_k = x[-1]
-
+gp.predict_trajectory(times[0],36,True)
+gp.gp_predictions = None
+import time
+start_t = time.perf_counter()
 for k, t in enumerate(times, start=start):
     # get parameters: predicted wind speed, power demand, initial state
     # wind_speeds = [data_handler.get_measurement(t, i) for i in range(chance_constrained_mpc.horizon)] # perfect forecast
@@ -190,4 +194,6 @@ for k, t in enumerate(times, start=start):
     P_gtg_last = P_gtg
     P_demand_last = P_demand
     if plot: plt.pause(0.5)
+stop_t = time.perf_counter()
+print(f'{(stop_t-start_t): .3f} s')
 pass

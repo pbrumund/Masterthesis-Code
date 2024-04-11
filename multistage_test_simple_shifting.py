@@ -21,9 +21,10 @@ std_factor = norm.ppf(1-epsilon)
 std_list = (-std_factor, 0, std_factor)
 
 mpc_opt = get_mpc_opt(N=36, std_list_multistage=std_list, use_simple_scenarios=True, dE_min=0, t_start_sim=datetime.datetime(2022,1,1), use_soft_constraints_state=False, include_last_measurement=True)#,  t_start=datetime.datetime(2022,12,6), t_end=datetime.datetime(2022,12,8))
-mpc_opt['param']['k_dP'] = 10
-mpc_opt['param']['r_s_E'] = 100
+mpc_opt['param']['k_dP'] = 100
+mpc_opt['param']['r_s_E'] = 0.1
 mpc_opt['param']['k_bat'] = 0
+#mpc_opt['param']['k_E_shifted'] = 0.01
 mpc_opt['use_path_constraints_energy'] = True
 gp_opt = get_gp_opt(dt_pred = mpc_opt['dt'], steps_forward = mpc_opt['N'], verbose=False)
 gp = TimeseriesModel(gp_opt)
@@ -76,7 +77,7 @@ if plot:
     fig_E_tot, ax_E_tot = plt.subplots(2, sharex=True, num='Multi-stage MPC, total Energy output')
 # save trajectories to file
 dims = {'Power output': 4, 'Power demand': 1, 'SOC': 1, 'Inputs': 2}
-data_saver = DataSaving('multi-stage_mpc_shifting_50MWh', mpc_opt, gp_opt, dims)
+data_saver = DataSaving('multi-stage_mpc_shifting_8_10', mpc_opt, gp_opt, dims)
 
 # load trajectories if possible
 start = 0
@@ -128,7 +129,7 @@ for k, t in enumerate(times, start=start):
     means_now = multistage_mpc.means
     gp_predictions = [means_pred, means_now]
     # E_shifted = np.sum(P_traj[:,3]-P_traj[:,4])
-    p = multistage_mpc.get_parameters(x_k, P_gtg_last, P_out_last, P_min, E_shifted, P_demand, 50000, gp_predictions=gp_predictions)
+    p = multistage_mpc.get_parameters(x_k, P_gtg_last, P_out_last, P_min, E_shifted, P_demand, 10000, gp_predictions=gp_predictions)
 
     if v_init_next is None:
         v_init = multistage_mpc.get_initial_guess(v_last, P_wtg, x_k, P_demand, v_last_all)

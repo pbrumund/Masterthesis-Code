@@ -44,16 +44,16 @@ def get_GAST_model():
     gtg_GAST.x0 = ca.DM([0.5,2250])
     return gtg_GAST
 
-def get_static_GTG():
+def get_static_GTG(P_gtg_max=32000):
     P_gtg = ca.SX.sym('P_gtg')
     x = ca.SX.sym('x', 0)
     gtg = GasTurbineGenerator(x, P_gtg, {}, P_gtg, x)
-    P_gtg_max = 32000
+    # P_gtg_max = 32000
     gtg.set_bounds(lbx=ca.DM.zeros(0), ubx=ca.DM.ones(0), lbu=ca.DM(0), ubu=ca.DM(P_gtg_max))
     gtg.x0 = ca.DM.zeros(0)
     gtg.P_max = P_gtg_max
     load = ca.SX.sym('load')
-    eta = -0.322*load**2+0.828*load+1e-6 # -0.187*load**2+0.406*load+0.263
+    eta = -0.322*load**2+0.828*load+1e-6 
     gtg.eta_fun = ca.Function('eta_gtg', [load], [eta])
     return gtg
 

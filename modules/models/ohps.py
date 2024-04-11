@@ -7,11 +7,11 @@ import casadi as ca
 import numpy as np
 
 class OHPS(DynamicModel):
-    def __init__(self, N_p=32000):
+    def __init__(self, N_p=32000, P_gtg_max=32000):
         """combine subsystems into one, trying to make code modular to be able to use different models"""
         # self.gtg = get_GAST_model() # does not make sense for discretization interval of multiple minutes
         # self.gtg = get_integrator_GTG(60*10)
-        self.gtg = get_static_GTG()
+        self.gtg = get_static_GTG(P_gtg_max=P_gtg_max)
         self.battery = get_shepherd_model_LiIon(N_s=330,N_p = N_p) 
         #~4*9.5 MWh, 1200 V, 4*6MW (for 5000A max current), ca. 12 ISO 40 containers
         # N_s=170 for ~5 MWh is not enough to satisfy demand for all scenarios 

@@ -15,7 +15,7 @@ from modules.mpc import LowLevelController
 plot = False
 ohps = OHPS()
 
-mpc_opt = get_mpc_opt(N=36, use_soft_constraints_state=False)
+mpc_opt = get_mpc_opt(N=36, use_soft_constraints_state=False,t_start_sim=datetime.datetime(2022,1,17), t_end_sim=datetime.datetime(2022,1,18))
 nominal_mpc = NominalMPC(ohps, mpc_opt)
 nominal_mpc.get_optimization_problem()
 
@@ -74,7 +74,8 @@ if values is not None:
     u_traj[:n_vals,:] = inputs
     P_traj[:n_vals,:] = P
     x_k = x[-1]
-
+import time
+start_t = time.perf_counter()
 for k, t in enumerate(times, start=start):
     # get parameters: predicted wind speed, power demand, initial state
     wind_speeds = [data_handler.get_measurement(t, i) for i in range(nominal_mpc.horizon)] # perfect forecast
@@ -141,4 +142,6 @@ for k, t in enumerate(times, start=start):
     P_demand_last = P_demand
 
     if plot: plt.pause(0.1)
+stop_t = time.perf_counter()
+print(f'{(stop_t-start_t): .3f} s')
 pass

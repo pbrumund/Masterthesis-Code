@@ -17,7 +17,7 @@ plot = False
 plot_predictions = True
 ohps = OHPS()
 
-mpc_opt = get_mpc_opt(N=36, use_soft_constraints_state=False)#, t_start=datetime.datetime(2022,12,6), t_end=datetime.datetime(2022,12,8))
+mpc_opt = get_mpc_opt(N=36, use_soft_constraints_state=False, epsilon_chance_constraint=0.01)#, t_start=datetime.datetime(2022,12,6), t_end=datetime.datetime(2022,12,8))
 # mpc_opt['param']['r_s_x'] = 1e6
 chance_constrained_mpc = ChanceConstrainedMPC(ohps, mpc_opt)
 chance_constrained_mpc.get_optimization_problem()
@@ -59,7 +59,7 @@ if plot:
 
 # save trajectories to file
 dims = {'Power output': 4, 'Power demand': 1, 'SOC': 1, 'Inputs': 2} # State: 1
-data_saver = DataSaving('chance_constrained_mpc_without_llc_direct_rerun', mpc_opt, gp_opt, dims)
+data_saver = DataSaving('chance_constrained_mpc_with_llc_direct', mpc_opt, gp_opt, dims)
 
 # load trajectories if possible
 start = 0

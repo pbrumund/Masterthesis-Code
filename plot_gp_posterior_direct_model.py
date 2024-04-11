@@ -18,7 +18,7 @@ matplotlib.rcParams.update({
 
 plt.ion()
 # unstable scenario
-t_start = datetime.datetime(2022,5,11,6) # 02,24 03,21 5,25 10,7
+t_start = datetime.datetime(2022,5,11,5) # 02,24 03,21 5,25 10,7
 steps = 36
 steps_before = 36
 x = np.arange(-steps_before, steps-1, 1)
@@ -44,7 +44,7 @@ axs[0].set_ylabel('Wind speed (m/s)')
 fig.legend(handles = [plt_meas, plt_nwp, plt_gp], labels=['Measurement', 'NWP', 'GP prediction'],
            loc='upper center', bbox_to_anchor=(0.5,1.15), ncol=3)
 
-t_start = datetime.datetime(2022,4,19,6) # 02,24 03,21 6,29 4,13
+t_start = datetime.datetime(2022,4,19,5) # 02,24 03,21 6,29 4,13
 steps = 36
 steps_before = 36
 x = np.arange(-steps_before, steps-1, 1)

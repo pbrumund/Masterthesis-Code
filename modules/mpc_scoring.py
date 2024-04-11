@@ -49,7 +49,7 @@ def get_gtg_emissions(mpc_name, mpc_opt, gp_opt, run_id=None):
     fuel = np.where(P_gtg<1, 0, P_gtg/eta_gtg)/1000 # MW
     return np.mean(fuel[:52272]), np.mean(eta_gtg[:52272])
     
-def get_energy_constraint_violation(mpc_name, mpc_opt, gp_opt, run_id=None):
+def get_energy_constraint_violation(mpc_name, mpc_opt, gp_opt, run_id=None, E_backoff=10):
     array_dims = {'Power output': 4, 'Power demand': 1, 'SOC': 1, 'Inputs': 2}
     data_loader = DataSaving(mpc_name, mpc_opt, gp_opt, array_dims, run_id)
     data, times = data_loader.load_trajectories()
@@ -57,11 +57,11 @@ def get_energy_constraint_violation(mpc_name, mpc_opt, gp_opt, run_id=None):
     P_total = data['Power output'][:,-1][:52272]
     E_shifted = np.cumsum((P_total-P_demand)/6000)
     constraint_violation = np.where(
-        np.abs(E_shifted)>10,
-        np.abs(E_shifted)-10,
+        np.abs(E_shifted)>E_backoff,
+        np.abs(E_shifted)-E_backoff,
         0
     )
-    return np.mean(constraint_violation), np.max(constraint_violation), np.nonzero(constraint_violation)[0].shape[0]/E_shifted.shape[0]
+    return np.mean(constraint_violation), np.max(constraint_violation), np.nonzero(constraint_violation)[0].shape[0]/E_shifted.shape[0],np.sqrt( np.mean(np.square(constraint_violation)))
 
 class DataSaving:
     def __init__(self, mpc_name, mpc_opt, gp_opt, array_dims, run_id=None) -> None:

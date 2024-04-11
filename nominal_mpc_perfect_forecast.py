@@ -11,9 +11,9 @@ from modules.plotting import TimeseriesPlot
 from modules.mpc_scoring import DataSaving
 
 plot = False
-ohps = OHPS()
+ohps = OHPS(N_p=32000, P_gtg_max=32000)
 
-mpc_opt = get_mpc_opt(N=36, use_soft_constraints_state=False)
+mpc_opt = get_mpc_opt(N=36, use_soft_constraints_state=False,t_start_sim=datetime.datetime(2022,1,17), t_end_sim=datetime.datetime(2022,1,18))
 t_start = mpc_opt['t_start_sim']
 t_end = mpc_opt['t_end_sim']
 # mpc_opt['param']['k_gtg_P'] = 10
@@ -62,7 +62,7 @@ if plot:
 # save trajectories to file
 dims = {'Power output': 4, 'Power demand': 1, 'SOC': 1, 'Inputs': 2}
 
-data_saver = DataSaving('nominal_mpc_perfect_forecast', mpc_opt, gp_opt, dims)
+data_saver = DataSaving('nominal_mpc_perfect_forecast_', mpc_opt, gp_opt, dims)
 
 # load trajectories if possible
 start = 0
@@ -83,7 +83,8 @@ if values is not None:
     u_traj[:n_vals,:] = inputs
     P_traj[:n_vals,:] = P
     x_k = x[-1]
-
+import time
+start_t = time.perf_counter()
 for k, t in enumerate(times, start=start):
     # get parameters: predicted wind speed, power demand, initial state
     wind_speeds = [data_handler.get_measurement(t, i) for i in range(nominal_mpc.horizon)] # perfect forecast
@@ -91,9 +92,10 @@ for k, t in enumerate(times, start=start):
     P_wtg = [4*ohps.wind_turbine.power_curve_fun(ohps.wind_turbine.scale_wind_speed(w)) for w in wind_speeds_nwp]
     wind_speeds = ca.vertcat(*wind_speeds)
     if P_demand_last is not None:
-        P_demand = ca.vertcat(P_demand_last[1:], P_wtg[-1] + 0.8*ohps.P_gtg_max)
+        P_demand = ca.vertcat(P_demand_last[1:], ca.fmax(P_wtg[-1] + 0.8*ohps.P_gtg_max, 16000))
     else:
         P_demand = ca.vertcat(*P_wtg) + 0.8*ohps.gtg.bounds['ubu']
+        P_demand = ca.fmax(P_demand, 16000*ca.DM.ones(nominal_mpc.horizon))
     # P_demand = scheduler.get_P_demand(t, x_k, dE)
     # P_demand = 8000*ca.DM.ones(nominal_mpc.horizon)
     p = nominal_mpc.get_p_fun(x_k, P_gtg_last, wind_speeds, P_demand)
@@ -157,6 +159,7 @@ for k, t in enumerate(times, start=start):
     P_gtg_last = P_gtg
     P_demand_last = P_demand
     dE = 40000/6*(k+1)
-    plt.pause(0.1)
-
+    if plot: plt.pause(0.1)
+stop_t = time.perf_counter()
+print(f'{(stop_t-start_t): .3f} s')
 pass

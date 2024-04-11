@@ -12,17 +12,18 @@ from modules.mpc_scoring import DataSaving
 
 
 plot = False
-ohps = OHPS(N_p=8000)
+ohps = OHPS(N_p=8000, P_gtg_max=32000)
 
 mpc_opt = get_mpc_opt(N=36)
 t_start = datetime.datetime(2022,1,1)
 t_end = datetime.datetime(2022,12,31)
 mpc_opt['t_start_sim'] = t_start
-mpc_opt['t_end_sim'] = t_end
-# mpc_opt['param']['k_gtg_P'] = 10
-# mpc_opt['param']['k_gtg_eta'] = 20
+# mpc_opt['t_end_sim'] = t_end
+mpc_opt['param']['k_gtg_P'] = 10
+mpc_opt['param']['k_gtg_eta'] = 20
+mpc_opt['param']['k_gtg_fuel'] = 0
+mpc_opt['param']['k_E_shifted'] = 1
 # mpc_opt['param']['k_gtg_dP'] = 1
-# mpc_opt['param']['k_gtg_fuel'] = 0
 # mpc_opt['param']['k_bat'] = 0.5
 # mpc_opt['param']['k_dP'] = 20
 # mpc_opt['param']['r_s_E'] = 10000
@@ -77,7 +78,7 @@ if plot:
     fig_E_tot, ax_E_tot = plt.subplots(2, num='Nominal MPC with perfect forecast, total energy output', sharex=True)
 # save trajectories to file
 dims = {'Power output': 4, 'Power demand': 1, 'SOC': 1, 'Inputs': 2}
-data_saver = DataSaving('nominal_mpc_perfect_forecast_shifting_50MWh', mpc_opt, gp_opt, dims)
+data_saver = DataSaving('nominal_mpc_perfect_forecast_shifting', mpc_opt, gp_opt, dims)
 
 # load trajectories if possible
 start = 0
@@ -115,9 +116,10 @@ for k, t in enumerate(times, start=start):
     wind_speeds = ca.vertcat(*wind_speeds)
     # P_demand = scheduler.get_P_demand(t, x_k, dE)
     if P_demand_last is not None:
-        P_demand = ca.vertcat(P_demand_last[1:], P_wtg[-1] + 0.8*ohps.P_gtg_max)
+        P_demand = ca.vertcat(P_demand_last[1:], ca.fmax(P_wtg[-1] + 0.8*ohps.P_gtg_max, 16000))
     else:
-        P_demand = ca.vertcat(*P_wtg) + 0.8*ohps.gtg.bounds['ubu']
+        P_demand = ca.vertcat(*P_wtg) + 0.8*ohps.P_gtg_max
+        P_demand = ca.fmax(P_demand, 16000*ca.DM.ones(nominal_mpc.horizon))
     E_sched += P_demand[0]
     E_target = ca.sum1(P_demand) + dE_sched # total scheduled demand plus compensation for previously not satisfied demand
     # P_demand = 8000*ca.DM.ones(nominal_mpc.horizon)

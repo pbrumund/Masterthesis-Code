@@ -20,9 +20,10 @@ epsilon = 0.1
 std_factor = norm.ppf(1-epsilon)
 std_list = (-std_factor, 0, std_factor)
 
-mpc_opt = get_mpc_opt(N=36, std_list_multistage=std_list, use_simple_scenarios=True, dE_min=5000, include_last_measurement=True, use_soft_constraints_state=False)#,  t_start=datetime.datetime(2022,12,6), t_end=datetime.datetime(2022,12,8))
+mpc_opt = get_mpc_opt(N=36, std_list_multistage=std_list, use_simple_scenarios=True, dE_min=0, include_last_measurement=True, use_soft_constraints_state=False,t_start_sim=datetime.datetime(2022,1,17), t_end_sim=datetime.datetime(2022,1,18))#,  t_start=datetime.datetime(2022,12,6), t_end=datetime.datetime(2022,12,8))
 gp_opt = get_gp_opt(dt_pred = mpc_opt['dt'], steps_forward = mpc_opt['N'], verbose=False)
 gp = TimeseriesModel(gp_opt)
+gp.predictions_mean = None
 ohps.setup_integrator(dt=60*mpc_opt['dt'])
 
 multistage_mpc = MultistageMPC(ohps, gp, mpc_opt)
@@ -61,7 +62,7 @@ if plot:
         fig_pred, ax_pred = plt.subplots(2, sharex=True, num='Multi-stage MPC, wind predictions')
 # save trajectories to file
 dims = {'Power output': 4, 'Power demand': 1, 'SOC': 1, 'Inputs': 2}
-data_saver = DataSaving('multi-stage_mpc_without_llc', mpc_opt, gp_opt, dims)
+data_saver = DataSaving('multi-stage_mpc_without_llc_branch_immediately', mpc_opt, gp_opt, dims)
 
 # load trajectories if possible
 start = 0
@@ -82,7 +83,10 @@ if values is not None:
     u_traj[:n_vals,:] = inputs
     P_traj[:n_vals,:] = P
     x_k = x[-1]
-
+gp.predict_trajectory(times[0],36,True)
+gp.gp_predictions = None
+import time
+start_t = time.perf_counter()
 for k, t in enumerate(times, start=start):
     # get parameters: predicted wind speed, power demand, initial state
     wind_speeds_nwp = [data_handler.get_NWP(t, i) for i in range(multistage_mpc.horizon)]
@@ -196,4 +200,6 @@ for k, t in enumerate(times, start=start):
     P_demand_last = P_demand
     if plot:
         plt.pause(0.5)
+stop_t = time.perf_counter()
+print(f'{(stop_t-start_t): .3f} s')
 pass

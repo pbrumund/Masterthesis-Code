@@ -674,6 +674,14 @@ class TreeNode:
         #     self.P_sum = P_gtg + P_wtg + P_bat
         # else:
         #     self.P_sum = self.predecessor.P_sum + P_gtg + P_wtg + P_bat
+        if self.opt['use_path_constraints_energy']:
+            # sum(P_out) + s_E >= E_target - E_backoff
+            g_E_lower = -self.E_shifted - self.E_backoff - self.s_E_path
+            # sum(P_out) - s_E <= E_target + E_backoff
+            g_E_upper = self.E_shifted - self.s_E_path - self.E_backoff
+            self.constraints.append(ca.vertcat(g_E_lower, g_E_upper))
+            g_lb.append(-ca.inf*ca.DM.ones(2))
+            g_ub.append(ca.DM.zeros(2))
         if self.is_leaf_node:
             # State constraints on x_N
             x_next = self.ohps.get_next_state(self.x, self.u)
@@ -692,20 +700,17 @@ class TreeNode:
             self.constraints.append(g_demand)
             g_lb.append(g_demand_lb)
             g_ub.append(g_demand_ub)
-            g_E = -(self.E_shifted + P_out - self.P_demand) - self.s_E
+            if self.opt['use_path_constraints_energy']:
+                s_E = self.s_E_path
+            else:
+                s_E = self.s_E
+            g_E = -(self.E_shifted + P_out - self.P_demand) - s_E
             g_E_lb = -ca.inf
             g_E_ub = 0
             self.constraints.append(g_E)
             g_lb.append(g_E_lb)
             g_ub.append(g_E_ub)
-        if self.opt['use_path_constraints_energy']:
-            # sum(P_out) + s_E >= E_target - E_backoff
-            g_E_lower = -self.E_shifted - self.E_backoff - self.s_E_path
-            # sum(P_out) - s_E <= E_target + E_backoff
-            g_E_upper = self.E_shifted - self.s_E_path - self.E_backoff
-            self.constraints.append(ca.vertcat(g_E_lower, g_E_upper))
-            g_lb.append(-ca.inf*ca.DM.ones(2))
-            g_ub.append(ca.DM.zeros(2))
+        
 
         if self.opt['use_soft_constraints_state'] and not self.is_root_node:
             x_next = self.ohps.get_next_state(self.x, self.u)
@@ -764,7 +769,12 @@ class TreeNode:
             self.J_s_E_path = self.opt['param']['r_s_E']*(self.s_E_path)**2*1/(self.time_index+1)**2
         else:
             self.J_s_E_path = 0
-        self.J = (self.J_gtg+self.J_bat+self.J_u+self.J_dP+self.J_s_E+self.J_s_x+self.J_s_E_path)*self.probability
+        k_E_shifted = self.opt['param'].get('k_E_shifted')
+        if k_E_shifted is not None:
+            self.J_E_shifted = k_E_shifted*(self.E_shifted/1000)**2
+        else:
+            self.J_E_shifted = 0
+        self.J = (self.J_gtg+self.J_bat+self.J_u+self.J_dP+self.J_s_E+self.J_s_x+self.J_s_E_path+self.J_E_shifted)*self.probability
         
         
 
